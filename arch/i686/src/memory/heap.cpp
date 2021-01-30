@@ -13,10 +13,10 @@
 #define BITMAP_CLEAR_BIT(bitmap, bit) ( (bitmap[bit / 8] &= ~(1 << (bit % 8))) )
 
 // The heap pool is where the allocated memory lives.
-uint8_t heap_pool[HEAP_MEMORY_POOL] __attribute__((section(".heap")));
+ __attribute__((alignment(4 * 1024))) __attribute__((section(".heap"))) uint8_t heap_pool[HEAP_MEMORY_POOL];
 
 
-uint8_t heap_bitmap[HEAP_BITMAP_SIZE] __attribute__((section(".heap_metadata")));
+ __attribute__((alignment(4 * 1024))) __attribute__((section(".heap_metadata"))) uint8_t heap_bitmap[HEAP_BITMAP_SIZE];
 
 
 int heap_init() {
@@ -36,7 +36,7 @@ int heap_init() {
     return 0;
 }
 
-void* kmalloc_imp(uint32_t size) {
+void* kmalloc_imp(uint32_t size, uint32_t align) {
     Kernel::debug_puts("kmalloc: allocating 0x"); Kernel::debug_puti(size, 16); Kernel::debug_puts("bytes\n\r");
     if(size == 0) { Kernel::debug_puts("kmalloc: attempted allocation of 0 area!\n\r"); return nullptr; }
     // Calculate chunk count
@@ -44,6 +44,8 @@ void* kmalloc_imp(uint32_t size) {
     if(size % HEAP_BLOCK_SIZE) { chunk_count++; }
     // Loop through the chunks
     for(int i = 0; i < HEAP_BITMAP_BITS_COUNT; i++) {
+        // Check if the alignment allows this
+        if(align != 0 && (((uint32_t)heap_bitmap + (i * HEAP_BLOCK_SIZE)) & align)) { continue; }
         int bit = BITMAP_GET_BIT(heap_bitmap, i);
         // Is it free?
         if(bit != 0) { continue; }
@@ -61,7 +63,7 @@ void* kmalloc_imp(uint32_t size) {
         }
 
         // Return pointer
-        return (void*)(heap_bitmap + (i * HEAP_BLOCK_SIZE));
+        return (void*)((uint32_t)heap_bitmap + (i * HEAP_BLOCK_SIZE));
     }
 
     // Allocation failed, return null

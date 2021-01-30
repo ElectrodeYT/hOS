@@ -30,12 +30,14 @@ void debug_serial_init() {
     outb(0x3F8 + 4, 0x0F);
 }
 
-void debug_puti(uint32_t i, int base) {
+void debug_puti(int i, int base) {
+    static char text[17] = "0123456789ABCDEF";
     char buf[32];
-    char* text = "0123456789ABCDEF";
     int num = i;
     int pointer = 0; 
     
+    for(int x = 0; x < 32; x++) { buf[x] = '\0'; }
+
     while(num != 0) {
         int modulo = num % base;
         if(modulo < 0) { modulo = -modulo; }

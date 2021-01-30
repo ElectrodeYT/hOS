@@ -9,7 +9,7 @@ void debug_serial_init();
 
 void debug_put(char c);
 void debug_puts(const char* s);
-void debug_puti(uint32_t i, int base = 10);
+void debug_puti(int i, int base = 10);
 
 }
 #endif

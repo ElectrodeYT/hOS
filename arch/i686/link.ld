@@ -6,6 +6,8 @@ SECTIONS {
     address space, which will be mapped to 1MB in the
     physical address space. */
     . = 0xC0100000;
+    
+    kernel_begin = .;
 
     .text : AT(ADDR(.text) - 0xC0000000) {
         *(.text)
@@ -47,6 +49,8 @@ SECTIONS {
         *(.heap)
         kerenel_heap_binary_end = .;
     }
+
+    kernel_end = .;
 
     /DISCARD/ : {
         *(.comment)

@@ -5,7 +5,7 @@ CPP := $(ARCH)-elf-g++
 AS := nasm
 
 C_ARGS := -ffreestanding -O2 -Wall -Wextra -g -Iarch/$(ARCH)/inc
-CPP_ARGS := -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fno-stack-protector -g -Iarch/$(ARCH)/inc
+CPP_ARGS := -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti -mno-mmx -mno-sse -mno-sse2 -mno-sse3 -mno-3dnow -mgeneral-regs-only -mno-red-zone -fno-stack-protector -g -Iarch/$(ARCH)/inc
 AS_ARGS := -f elf32 -g
 
 assembly := $(shell find arch/$(ARCH)/src/asm/ -name *.s)

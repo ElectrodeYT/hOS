@@ -1,4 +1,6 @@
 #include <stdint.h>
+#include <hardware/tables.h>
+#include <hardware/interrupts.h>
 #include <memory/heap.h>
 #include <memory/memorymanager.h>
 #include <multiboot/multiboot.h>
@@ -13,22 +15,23 @@ namespace Kernel {
 
 
 extern "C" void kmain(void* info, uint32_t multiboot_magic) {
-	// Initialize heap
-	// We want to do this before the constructors are called!
+	// Init kmalloc
 	heap_init();
+	// Init Page frame allocator.
+	MemoryManager::PageFrameAllocator::InitPageFrameAllocator(info);
+	// Init Virtual memory.
+	MemoryManager::VirtualMemory::InitVM();
 
 	// Call the global constructors
 	for (ctor_constructor* ctor = &start_ctors; ctor < &end_ctors; ctor++)
 		(*ctor)();
 
-	// Init Page frame allocator.
-	MemoryManager::PageFrameAllocator::InitPageFrameAllocator(info);
-	
 
-	// Init serial port
-	debug_serial_init();
-	debug_puts("Hello from kmain\n\r");
-	debug_puti(0xABCDEF, 16);
+	for(int i = 0; i < 10; i++) {
+		uint32_t page = (uint32_t)MemoryManager::PageFrameAllocator::AllocatePage();
+		debug_puti(page, 16); debug_puts("\n\r");
+	}
+
 
 	while(true) { } // hang here for a bit
 }

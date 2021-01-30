@@ -10,7 +10,7 @@
 // This should be called before the global constructors, so that they have a malloc() function to work with.
 int heap_init();
 
-[[gnu::malloc, gnu::returns_nonnull, gnu::alloc_size(1)]] void* kmalloc_imp(uint32_t size);
+[[gnu::malloc, gnu::returns_nonnull, gnu::alloc_size(1)]] void* kmalloc_imp(uint32_t size, uint32_t aligment = 0);
 int kfree(void* point);
 
 // C++ stuff
