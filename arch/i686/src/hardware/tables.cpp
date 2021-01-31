@@ -6,7 +6,7 @@
 namespace Kernel {
     namespace GDT {
 
-        struct __attribute__((packed)) GDTPointer {
+        struct __attribute__((packed)) __attribute__((aligned(0x1000))) GDTPointer {
             volatile uint16_t size;
             volatile uint32_t adr;
         };
@@ -20,33 +20,48 @@ namespace Kernel {
             volatile uint8_t base_2 = 0;
         };
 
-        static volatile GDTDesc gdt[16] __attribute__((packed)) __attribute__((aligned(0x1000)));
+        struct __attribute__((packed)) __attribute__((aligned(0x1000))) GDT {
+            GDTDesc null;
+            GDTDesc KernelCode;
+            GDTDesc KernelData;
+            GDTDesc UserCode;
+            GDTDesc UserData;
+            GDTDesc TSS;
+        };
+        static volatile GDT gdt;
+        static volatile GDTPointer gdt_pointer;
 
-        static volatile GDTPointer* gdt_pointer;
 
-        static uint32_t next_gdt_entry = 0;
-
-        void AddSegment(uint32_t base, uint32_t limit, uint8_t access, uint8_t flags) {
-            gdt[next_gdt_entry].limit_0 = limit & 0xFFFF;
-            gdt[next_gdt_entry].base_0 = base & 0xFFFF;
-            gdt[next_gdt_entry].base_1 = (base >> 16) & 0xFF;
-            gdt[next_gdt_entry].access = access;
-            gdt[next_gdt_entry].flags_limit_1 = ((limit >> 16) & 0x0F) | (flags & 0xF0);
-            gdt[next_gdt_entry].base_2 = (base >> 24) & 0xFF;
-            next_gdt_entry++;
+        __attribute__((optimize("O0")))  void SetSegment(volatile GDTDesc* desc, uint32_t limit, uint32_t base, uint8_t type) {
+            // Calculate granularity and adjust limit
+            if(limit > 65536) {
+                desc->flags_limit_1 = 0xC0;
+                limit = limit >> 12;
+            } else if(limit != 0) {
+                desc->flags_limit_1 = 0x40;
+            }
+            desc->limit_0 = limit & 0xFFFF;
+            desc->flags_limit_1 |= (limit >> 16) & 0x0F;
+            desc->base_0 = base & 0xFFFF;
+            desc->base_1 = (base >> 16) & 0xFF;
+            desc->base_2 = (base >> 24) & 0xFF;
+            desc->access = type;
         }
 
-        void InitGDT() {
+
+        __attribute__((optimize("O0")))  void InitGDT() {
             // Allocate gdt and gdt_pointer
+            gdt_pointer.adr = (uint32_t)&gdt;
+            gdt_pointer.size = sizeof(GDT) - 1;
 
-            gdt_pointer = new GDTPointer;
-            gdt_pointer->adr = (uint32_t)gdt;
-            gdt_pointer->size = sizeof(GDTDesc) * 16 - 1;
-
-            // Create really needed segments
-            AddSegment(0, 0, 0, 0);
-            AddSegment(0, 0xFFFFFFFF, 0x9A, 0xC0); // Kernel Code
-            AddSegment(0, 0xFFFFFFFF, 0x92, 0xC0); // Kernel Data
+            // Set the segements
+            SetSegment(&(gdt.null), 0, 0, 0);
+            SetSegment(&(gdt.KernelCode), 0xffffffff, 0, 0x9A);
+            SetSegment(&(gdt.KernelData), 0xffffffff, 0, 0x92);
+            SetSegment(&(gdt.UserCode), 0xffffffff, 0, 0xFA);
+            SetSegment(&(gdt.UserData), 0xffffffff, 0, 0xF2);
+            SetSegment(&(gdt.TSS), 0, 0, 0);
+            
             // Some inline assembly to load the GDT
             asm volatile("lgdt %0" : : "m"(gdt_pointer));
             flush_gdt();

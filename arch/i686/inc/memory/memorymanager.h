@@ -26,7 +26,10 @@ namespace Kernel {
         }
 
         namespace VirtualMemory {
+            int CheckIfPageIsMapped(uint32_t adr);
             int InitVM();
+            void* GetPage();
+            int MapPage(uint32_t phys, uint32_t virt);
         }
     }
 }

@@ -10,6 +10,7 @@ SECTIONS {
     kernel_begin = .;
 
     .text : AT(ADDR(.text) - 0xC0000000) {
+        *(.multiboot)
         *(.text)
         *(.gnu.linkonce.t*)
     }

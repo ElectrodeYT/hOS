@@ -30,16 +30,19 @@ BootPageDirectory:
     ; This page directory entry defines a 4MB page containing the kernel.
     dd 0x00000083
     times (1024 - KERNEL_PAGE_NUMBER - 1) dd 0  ; Pages after the kernel image.
-section .text
+section .multiboot
 align 4
 MultiBootHeader:
     dd MAGIC
     dd FLAGS
     dd CHECKSUM
- 
+
+section .text
+
 ; reserve initial kernel stack space -- that's 16k.
 STACKSIZE equ 0x4000
  
+
 ; setting up entry point for linker
 global loader
  

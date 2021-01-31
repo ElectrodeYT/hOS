@@ -38,12 +38,12 @@ void debug_puti(int i, int base) {
     
     for(int x = 0; x < 32; x++) { buf[x] = '\0'; }
 
-    while(num != 0) {
+    do {
         int modulo = num % base;
         if(modulo < 0) { modulo = -modulo; }
         buf[pointer++] = text[modulo];
         num /= base;
-    }
+    } while(num != 0);
 
     // Print it backwards
     if(base == 10 && i < 0) { debug_put('-'); }

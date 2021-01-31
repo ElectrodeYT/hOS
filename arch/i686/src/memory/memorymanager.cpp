@@ -73,7 +73,7 @@ namespace Kernel {
 
             void* AllocatePage() {
                 // Loop through all the ints
-                for(int i = 0; i < page_bitmap_size; i++) {
+                for(uint32_t i = 0; i < page_bitmap_size; i++) {
                     if(page_bitmap[i] != 0xFFFFFFFF) {
                         // There is a free page here
                         for(int x = 0; x < 32; x++) {
@@ -106,8 +106,35 @@ namespace Kernel {
 
             // This function maps a 4K page.
             // It will create a page table if one does not exist.
-            int MapPage() {
+            int MapPage(uint32_t phys, uint32_t virt) {
+                // Check the page directory
+                uint32_t* pd = (uint32_t*)0xFFFFF000;
+                uint32_t* page_table = (uint32_t*)(0xFFC00000 + (0x1000 * (virt >> 22)));
+                // Check if the page table exists
+                if(!(pd[virt >> 22] & 1)) {
+                    // It doesnt, create it
+                    pd[virt >> 22] = (uint32_t)PageFrameAllocator::AllocatePage() | 0b11;
+                    // Flush the tlb entry
+                    asm volatile("invlpg (%0)" : : "r" (virt) : "memory");
+                    // Clear it
+                    for(int i = 0; i < 1024; i++) {
+                        page_table[i] = 0;
+                    }
+                }
+                // The page table exists / was created
+                page_table[(virt >> 12) & 0x3FFF] = phys | 0b11;
+                return 0;
+            }
 
+            int CheckIfPageIsMapped(uint32_t adr) {
+                // Check the page directory
+                uint32_t* pd_offset = (uint32_t*)(0xFFFFF000 + ((adr >> 22) * 4));
+                if(!(*pd_offset & 1)) { return 0; } // Page table doesnt exist
+                // Check if its a region (4MiB) mapping
+                if(*pd_offset & 0b10000000) { return 1; }
+                // Check the page table
+                uint32_t* page_table = (uint32_t*)(0xFFC00000 + (0x1000 * (adr >> 22))); // page table this mapping is in
+                return page_table[(adr >> 12) & 0x3FFF] & 1; // Return if the first bit in the page table is set
             }
 
             int InitVM() {
@@ -126,7 +153,7 @@ namespace Kernel {
 
                 // Setup the recursive mapping
                 uint32_t pd_physical = (uint32_t)PageDirectory - KernelVirtualBase;
-                PageDirectory[1023] = pd_physical | 11;
+                PageDirectory[1023] = pd_physical | 0b11;
 
                 // Map the kernel
                 uint32_t kernel_begin_address = (uint32_t)(&kernel_begin) - KernelVirtualBase;
@@ -140,6 +167,30 @@ namespace Kernel {
 
                 asm volatile("mov %0, %%cr3;" : : "a" (pd_physical));
                 return 0;
+            }
+
+            // We begin the kernel virtual allocated pages here.
+            static uint32_t check_page_begin = 0xD0000000;
+            // We stop allocations here.
+            static uint32_t max_allocated_pages = 0xE0000000;
+            void* GetPage() {
+                while(check_page_begin < max_allocated_pages) {
+                    // Check page
+                    uint32_t virt_page = check_page_begin;
+                    check_page_begin += 4 * 1024;
+                    if(CheckIfPageIsMapped(check_page_begin)) {
+                        // This page is mapped,  and continue
+                        continue;
+                    }
+                    // Allocate physical page
+                    uint32_t physical_page = (uint32_t)PageFrameAllocator::AllocatePage();
+                    if(physical_page == NULL) { asm volatile("cli; hlt"); }
+                    // Now map that page
+                    MapPage(physical_page, virt_page);
+                    return (void*)virt_page;
+                }
+                asm volatile("cli; hlt");
+                return NULL; // will never happen
             }
         }
     }

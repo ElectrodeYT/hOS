@@ -19,8 +19,17 @@ extern "C" void kmain(void* info, uint32_t multiboot_magic) {
 	heap_init();
 	// Init Page frame allocator.
 	MemoryManager::PageFrameAllocator::InitPageFrameAllocator(info);
+	// Init GDT
+	GDT::InitGDT();
 	// Init Virtual memory.
 	MemoryManager::VirtualMemory::InitVM();
+
+
+	int test1 = MemoryManager::VirtualMemory::CheckIfPageIsMapped(MemoryManager::KernelVirtualBase);
+	int test2 = MemoryManager::VirtualMemory::CheckIfPageIsMapped(0);
+
+	debug_puti(test1); debug_puts("\n\r");
+	debug_puti(test2); debug_puts("\n\r");
 
 	// Call the global constructors
 	for (ctor_constructor* ctor = &start_ctors; ctor < &end_ctors; ctor++)
@@ -28,7 +37,7 @@ extern "C" void kmain(void* info, uint32_t multiboot_magic) {
 
 
 	for(int i = 0; i < 10; i++) {
-		uint32_t page = (uint32_t)MemoryManager::PageFrameAllocator::AllocatePage();
+		uint32_t page = (uint32_t)MemoryManager::VirtualMemory::GetPage();
 		debug_puti(page, 16); debug_puts("\n\r");
 	}
 
