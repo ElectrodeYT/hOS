@@ -68,14 +68,14 @@ namespace Kernel {
         }
     }
     namespace IDT {
-        struct __attribute__((packed)) IDTPointer {
+        struct __attribute__((packed)) __attribute__((aligned(0x1000))) IDTPointer {
             uint16_t size;
             uint32_t adr;
         };
 
-        IDTPointer* idt_pointer;
+        IDTPointer idt_pointer;
 
-        uint8_t* idt;
+        __attribute__((aligned(0x1000))) uint8_t idt[8 * 256];
 
         void SetEntry(uint32_t entry, uint32_t offset, uint16_t segment, uint8_t type) {
             idt[entry * 8 + 0] = offset & 0xFF;
@@ -93,14 +93,11 @@ namespace Kernel {
         }
 
         void InitIDT() {
-            // Allocate IDT
-            idt = new uint8_t[8 * 256];
+            // Clear IDT
             for(int i = 0; i < 8 * 256; i++) { idt[i] = 0; }
-            // Allocate IDT pointer
-            idt_pointer = new IDTPointer;
             // Set idt pointer
-            idt_pointer->adr = (uint32_t)idt;
-            idt_pointer->size = 8 * 256;
+            idt_pointer.adr = (uint32_t)idt;
+            idt_pointer.size = 8 * 256 - 1;
             // Some inline assembly to load the IDT
             asm volatile("lidt %0" : : "m"(idt_pointer));
         }

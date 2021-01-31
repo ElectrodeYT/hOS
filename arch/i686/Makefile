@@ -21,7 +21,7 @@ create-image $(image): $(kernel)
 	@grub-mkrescue $(cd_root) -o $(image)
 
 qemu: $(image)
-	@qemu-system-i386 -cdrom $(image) -m 256
+	@qemu-system-i386 -cdrom $(image) -m 256 -d int
 
 qemu-debug: $(image)
 	@gdb -x boot/gdb.gdb -tui

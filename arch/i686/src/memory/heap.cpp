@@ -13,10 +13,10 @@
 #define BITMAP_CLEAR_BIT(bitmap, bit) ( (bitmap[bit / 8] &= ~(1 << (bit % 8))) )
 
 // The heap pool is where the allocated memory lives.
- __attribute__((alignment(4 * 1024))) __attribute__((section(".heap"))) uint8_t heap_pool[HEAP_MEMORY_POOL];
+ __attribute__((aligned(0x1000))) __attribute__((section(".heap"))) uint8_t heap_pool[HEAP_MEMORY_POOL];
 
 
- __attribute__((alignment(4 * 1024))) __attribute__((section(".heap_metadata"))) uint8_t heap_bitmap[HEAP_BITMAP_SIZE];
+ __attribute__((aligned(0x1000))) __attribute__((section(".heap_metadata"))) uint8_t heap_bitmap[HEAP_BITMAP_SIZE];
 
 
 int heap_init() {

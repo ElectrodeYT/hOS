@@ -36,6 +36,9 @@ extern "C" void kmain(void* info, uint32_t multiboot_magic) {
 		(*ctor)();
 
 
+	// Initialize interrupts
+	Interrupts::SetupInterrupts();
+
 	for(int i = 0; i < 10; i++) {
 		uint32_t page = (uint32_t)MemoryManager::VirtualMemory::GetPage();
 		debug_puti(page, 16); debug_puts("\n\r");
