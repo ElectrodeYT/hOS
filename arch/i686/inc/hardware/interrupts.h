@@ -6,17 +6,13 @@
 namespace Kernel {
     namespace Interrupts {
 
-        struct InterruptFrame {
-            uint32_t ip;
-            uint32_t cs;
-            uint32_t flags;
-            uint32_t sp;
-            uint32_t ss;
+        struct __attribute__((packed)) Registers {
+            uint32_t ds;					// Data segment selector
+            uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax; 	// Pushed by pusha.
+            uint32_t int_no, err_code;			// Interrupt number and error code (if applicable)
+            uint32_t eip, cs, eflags, useresp, ss;		// Pushed by the processor automatically.
         };
-
         void SetupInterrupts();
-
-        void HandleInterrupt(int id, InterruptFrame* frame);
 
         void EnableInterrupts();
         void DisableInterrupts();

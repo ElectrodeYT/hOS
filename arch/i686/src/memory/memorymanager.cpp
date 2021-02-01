@@ -3,6 +3,8 @@
 #include <multiboot/multiboot.h>
 #include <debug/debug_print.h>
 
+#include <panic.h>
+
 extern "C" const uint32_t kernel_begin;
 extern "C" const uint32_t kernel_end;
 
@@ -162,7 +164,7 @@ namespace Kernel {
                 for(uint32_t curr_adr = kernel_begin_address; curr_adr <= kernel_end_address; curr_adr += 4 * 1024 * 1024) {
                     // We map the kernel with PD Regions
                     uint32_t virtual_adr = curr_adr + KernelVirtualBase;
-                    PageDirectory[virtual_adr >> 22] = curr_adr & ~(0x3FFFFF) | 0b10000001;
+                    PageDirectory[virtual_adr >> 22] = (curr_adr & ~(0x3FFFFF)) | 0b10000001;
                 }
 
                 asm volatile("mov %0, %%cr3;" : : "a" (pd_physical));
@@ -184,7 +186,7 @@ namespace Kernel {
                     }
                     // Allocate physical page
                     uint32_t physical_page = (uint32_t)PageFrameAllocator::AllocatePage();
-                    if(physical_page == NULL) { asm volatile("cli; hlt"); }
+                    if(physical_page == 0) { panic("Could not allocate physical page"); }
                     // Now map that page
                     MapPage(physical_page, virt_page);
                     return (void*)virt_page;

@@ -90,6 +90,9 @@ StartInHigherHalf:
  
  
 section .bss
-align 32
+align 0x1000
+global stack_guard_page
+stack_guard_page:
+    resb 0x1000
 stack:
     resb STACKSIZE      ; reserve 16k stack on a uint64_t boundary

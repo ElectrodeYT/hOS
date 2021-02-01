@@ -27,4 +27,4 @@ qemu-debug: $(image)
 	@gdb -x boot/gdb.gdb -tui
 
 clean:
-	@rm $(image) 2> /dev/null; true
+	@rm $(image) $(cd_root_kernel) 2> /dev/null; true

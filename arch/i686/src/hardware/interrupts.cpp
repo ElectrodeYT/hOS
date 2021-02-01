@@ -4,24 +4,61 @@
 
 #include <debug/debug_print.h>
 
-#pragma region 
-__attribute__((interrupt)) void isr_32(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(32, frame); }
-__attribute__((interrupt)) void isr_33(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(33, frame); }
-__attribute__((interrupt)) void isr_34(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(34, frame); }
-__attribute__((interrupt)) void isr_35(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(35, frame); }
-__attribute__((interrupt)) void isr_36(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(36, frame); }
-__attribute__((interrupt)) void isr_37(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(37, frame); }
-__attribute__((interrupt)) void isr_38(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(38, frame); }
-__attribute__((interrupt)) void isr_39(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(39, frame); }
-__attribute__((interrupt)) void isr_40(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(40, frame); }
-__attribute__((interrupt)) void isr_41(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(41, frame); }
-__attribute__((interrupt)) void isr_42(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(42, frame); }
-__attribute__((interrupt)) void isr_43(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(43, frame); }
-__attribute__((interrupt)) void isr_44(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(44, frame); }
-__attribute__((interrupt)) void isr_45(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(45, frame); }
-__attribute__((interrupt)) void isr_46(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(46, frame); }
-__attribute__((interrupt)) void isr_47(Kernel::Interrupts::InterruptFrame* frame) { Kernel::Interrupts::HandleInterrupt(47, frame); }
+#include <panic.h>
 
+#pragma region 
+
+// Interrupts from CPU (Page fault, GPF, ...)
+extern "C" void isr0 ();
+extern "C" void isr1 ();
+extern "C" void isr2 ();
+extern "C" void isr3 ();
+extern "C" void isr4 ();
+extern "C" void isr5 ();
+extern "C" void isr6 ();
+extern "C" void isr7 ();
+extern "C" void isr8 ();
+extern "C" void isr9 ();
+extern "C" void isr10();
+extern "C" void isr11();
+extern "C" void isr12();
+extern "C" void isr13();
+extern "C" void isr14();
+extern "C" void isr15();
+extern "C" void isr16();
+extern "C" void isr17();
+extern "C" void isr18();
+extern "C" void isr19();
+extern "C" void isr20();
+extern "C" void isr21();
+extern "C" void isr22();
+extern "C" void isr23();
+extern "C" void isr24();
+extern "C" void isr25();
+extern "C" void isr26();
+extern "C" void isr27();
+extern "C" void isr28();
+extern "C" void isr29();
+extern "C" void isr30();
+extern "C" void isr31();
+
+// Interrupt requests from hardware
+extern "C" void irq0();
+extern "C" void irq1();
+extern "C" void irq2();
+extern "C" void irq3();
+extern "C" void irq4();
+extern "C" void irq5();
+extern "C" void irq6();
+extern "C" void irq7();
+extern "C" void irq8();
+extern "C" void irq9();
+extern "C" void irq10();
+extern "C" void irq11();
+extern "C" void irq12();
+extern "C" void irq13();
+extern "C" void irq14();
+extern "C" void irq15();
 
 #pragma endregion
 
@@ -31,23 +68,59 @@ namespace Kernel {
             // Setup IDT
             IDT::InitIDT();
             DisableInterrupts();
-            // Set some irq's
-            IDT::SetEntry(0, (uint32_t)isr_32, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(1, (uint32_t)isr_33, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(2, (uint32_t)isr_34, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(3, (uint32_t)isr_35, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(4, (uint32_t)isr_36, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(5, (uint32_t)isr_37, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(6, (uint32_t)isr_38, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(7, (uint32_t)isr_39, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(8, (uint32_t)isr_40, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(9, (uint32_t)isr_41, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(10, (uint32_t)isr_42, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(11, (uint32_t)isr_43, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(12, (uint32_t)isr_44, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(13, (uint32_t)isr_45, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(14, (uint32_t)isr_46, 0x8, IDT::InterruptGateType);
-            IDT::SetEntry(15, (uint32_t)isr_47, 0x8, IDT::InterruptGateType);
+
+
+            // IRQs
+            IDT::SetEntry(32, (uint32_t)irq0, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(33, (uint32_t)irq1, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(34, (uint32_t)irq2, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(35, (uint32_t)irq3, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(36, (uint32_t)irq4, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(37, (uint32_t)irq5, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(38, (uint32_t)irq6, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(39, (uint32_t)irq7, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(40, (uint32_t)irq8, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(41, (uint32_t)irq9, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(42, (uint32_t)irq10, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(43, (uint32_t)irq11, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(44, (uint32_t)irq12, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(45, (uint32_t)irq13, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(46, (uint32_t)irq14, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(47, (uint32_t)irq15, 0x08, IDT::InterruptGateType);
+
+            // ISRs
+            IDT::SetEntry(0, (uint32_t)isr0, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(1, (uint32_t)isr1, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(2, (uint32_t)isr2, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(3, (uint32_t)isr3, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(4, (uint32_t)isr4, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(5, (uint32_t)isr5, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(6, (uint32_t)isr6, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(7, (uint32_t)isr7, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(8, (uint32_t)isr8, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(9, (uint32_t)isr9, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(10, (uint32_t)isr10, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(11, (uint32_t)isr11, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(12, (uint32_t)isr12, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(13, (uint32_t)isr13, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(14, (uint32_t)isr14, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(15, (uint32_t)isr15, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(16, (uint32_t)isr16, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(17, (uint32_t)isr17, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(18, (uint32_t)isr18, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(19, (uint32_t)isr19, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(20, (uint32_t)isr20, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(21, (uint32_t)isr21, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(22, (uint32_t)isr22, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(23, (uint32_t)isr23, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(24, (uint32_t)isr24, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(25, (uint32_t)isr25, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(26, (uint32_t)isr26, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(27, (uint32_t)isr27, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(28, (uint32_t)isr28, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(29, (uint32_t)isr29, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(30, (uint32_t)isr30, 0x08, IDT::InterruptGateType);
+            IDT::SetEntry(31, (uint32_t)isr31, 0x08, IDT::InterruptGateType);
 
             IDT::ReloadIDT();
 
@@ -62,28 +135,29 @@ namespace Kernel {
             outb(0xA1, 0x01);
             outb(0x21, 0x0);
             outb(0xA1, 0x0);
-            EnableInterrupts();
         }
 
+        extern "C" void isr_handler(Registers r) {
+            debug_puts("ISR Handler!"); debug_puti(r.int_no);
+            panic("Unhandled interrupt");
+        }
 
-        __attribute__((optimize("O0"))) void HandleInterrupt(int id, InterruptFrame* frame) {
-            // Check if this is a spurious interrupt
-            if(id == 39) { // IRQ 7
-                outb(0x20, 0x0B);
-                uint8_t in_service_register = inb(0x20);
-                // If bit7 isnt set, then this isnt a real interrupt and we can return
-                if(!(in_service_register & 0x80)) { return; }
-            }
-            
-            debug_puts("Interrupt "); debug_puti(id); debug_puts("\n\r");
-
-            // Send the EOI if needed
-            if(id >= 32 && id <= 47) {
-                outb(0xA0, 0x20); // Master PIX EOI
-                if(id >= 40) {
-                    outb(0x20, 0x20); // Slave PIC EOI
+        extern "C" void irq_handler(Registers r) {
+            switch(r.int_no) {
+                case 0: {
+                    // TODO: Scheduling
+                    break;
                 }
-            } 
+                default: {
+                    panic("Unhandled IRQ");
+                }
+            }
+            // Send EOI
+            if(r.int_no >= 40) {
+                // Send slave EOI
+                outb(0xA0, 0x20);
+            }
+            outb(0x20, 0x20);
         }
 
         void EnableInterrupts() {
