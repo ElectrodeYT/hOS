@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <debug/debug_print.h>
 #include <memory/heap.h>
+#include <panic.h>
 
 #define HEAP_MEMORY_POOL (2 * 1024 * 1024)
 #define HEAP_BLOCK_SIZE 8
@@ -24,21 +25,16 @@ int heap_init() {
     for(int i = 0; i < HEAP_MEMORY_POOL; i++) {
         heap_pool[i] = 0;
     }
-
-    Kernel::debug_puts("Zeroed pool\n\r");
-
     // Zero out the bitmap data
     for(int i = 0; i < HEAP_BITMAP_SIZE; i++) {
         heap_bitmap[i] = 0;
     }
-
-    Kernel::debug_puts("Zeroed metadata\n\r");
     return 0;
 }
 
 void* kmalloc_imp(uint32_t size, uint32_t align) {
-    Kernel::debug_puts("kmalloc: allocating 0x"); Kernel::debug_puti(size, 16); Kernel::debug_puts("bytes\n\r");
-    if(size == 0) { Kernel::debug_puts("kmalloc: attempted allocation of 0 area!\n\r"); return nullptr; }
+    // Kernel::debug_puts("kmalloc: allocating 0x"); Kernel::debug_puti(size, 16); Kernel::debug_puts("bytes\n\r");
+    if(size == 0) { panic("BUG: attemped kmalloc of 0 size"); }
     // Calculate chunk count
     int chunk_count = size / HEAP_BLOCK_SIZE;
     if(size % HEAP_BLOCK_SIZE) { chunk_count++; }
@@ -67,5 +63,6 @@ void* kmalloc_imp(uint32_t size, uint32_t align) {
     }
 
     // Allocation failed, return null
+    panic("kmalloc out of memory");
     return nullptr;
 }

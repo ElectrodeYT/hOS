@@ -44,7 +44,9 @@ extern "C" void kmain(void* info, uint32_t multiboot_magic) {
 		debug_puti(page, 16); debug_puts("\n\r");
 	}
 
-
+	// Trigger page fault
+	uint32_t* page_fault = (uint32_t*)0x41414141;
+	debug_puti(*page_fault, 16);
 	while(true) { } // hang here for a bit
 }
 

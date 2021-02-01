@@ -138,8 +138,42 @@ namespace Kernel {
         }
 
         extern "C" void isr_handler(Registers r) {
-            debug_puts("ISR Handler!"); debug_puti(r.int_no);
-            panic("Unhandled interrupt");
+            switch(r.int_no) {
+                case 0:
+                case 2:
+                case 4:
+                case 5:
+                case 6:
+                case 8:
+                case 10:
+                case 11:
+                case 12:
+                case 16:
+                case 17:
+                case 18:
+                case 19:
+                case 20:
+                case 30: {
+                    debug_puts("Unrecoverable exception: "); debug_puti(r.int_no);
+                    panic("Unrecoverable exception");
+                }
+                case 14: {
+                    debug_puts("Page fault: ");
+                    if(r.err_code & 0b1) { debug_puts("P "); }
+                    if(r.err_code & 0b10) { debug_puts("W "); } else { debug_puts("R "); }
+                    if(r.err_code & 0b100) { debug_puts("U "); }
+                    if(r.err_code & 0b1000) { debug_puts("R "); }
+                    if(r.err_code & 0b10000) { debug_puts("I "); }
+                    uint32_t cr2;
+                    asm volatile("movl %%cr2, %0" : "=a" (cr2));
+                    debug_puti(cr2, 16);
+                    panic("Unrecoverable page fault");
+                }
+
+                default: {
+                    panic("Unhandled exception");
+                }
+            }
         }
 
         extern "C" void irq_handler(Registers r) {
