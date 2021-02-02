@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-// GDT and IDT
+// GDT and IDT and TSS
 namespace Kernel {
     namespace GDT {
         void AddSegment(uint32_t base, uint32_t limit, uint8_t access, uint8_t flags);
@@ -15,6 +15,9 @@ namespace Kernel {
         void InitIDT();
         void ReloadIDT();
         const uint8_t InterruptGateType = 0b10001110;
+    }
+    namespace TSS {
+        void InitTSS();
     }
 }
 

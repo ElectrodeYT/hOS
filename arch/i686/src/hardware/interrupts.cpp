@@ -137,6 +137,13 @@ namespace Kernel {
             outb(0xA1, 0x0);
         }
 
+        void PrintRegisters(Registers r) {
+            debug_puts("\n\rEAX "); debug_puti(r.eax, 16); debug_puts(" ECX "); debug_puti(r.ecx, 16);
+            debug_puts("\n\rEDX "); debug_puti(r.edx, 16); debug_puts(" EBX "); debug_puti(r.ebx, 16);
+            debug_puts("\n\rESP "); debug_puti(r.esp, 16); debug_puts(" ESI "); debug_puti(r.esi, 16);
+            debug_puts("\n\rEDI "); debug_puti(r.edi, 16); debug_puts(" EIP "); debug_puti(r.eip, 16);
+        }
+
         extern "C" void isr_handler(Registers r) {
             switch(r.int_no) {
                 case 0:
@@ -167,6 +174,7 @@ namespace Kernel {
                     uint32_t cr2;
                     asm volatile("movl %%cr2, %0" : "=a" (cr2));
                     debug_puti(cr2, 16);
+                    PrintRegisters(r);
                     panic("Unrecoverable page fault");
                 }
 

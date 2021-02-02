@@ -104,7 +104,7 @@ namespace Kernel {
 
         namespace VirtualMemory {
             // Page directory
-            uint32_t* PageDirectory;
+            uint32_t __attribute__((aligned(4 * 1024))) PageDirectory[1024];
 
             // This function maps a 4K page.
             // It will create a page table if one does not exist.
@@ -117,7 +117,7 @@ namespace Kernel {
                     // It doesnt, create it
                     pd[virt >> 22] = (uint32_t)PageFrameAllocator::AllocatePage() | 0b11;
                     // Flush the tlb entry
-                    asm volatile("invlpg (%0)" : : "r" (virt) : "memory");
+                    asm volatile("invlpg (%0)" : : "r" ((0xFFC00000 + (0x1000 * (virt >> 22)))) : "memory");
                     // Clear it
                     for(int i = 0; i < 1024; i++) {
                         page_table[i] = 0;
@@ -125,7 +125,55 @@ namespace Kernel {
                 }
                 // The page table exists / was created
                 page_table[(virt >> 12) & 0x3FFF] = phys | 0b11;
+                // Flush the tlb entry
+                asm volatile("invlpg (%0)" : : "r" (virt) : "memory");
                 return 0;
+            }
+
+            // This function maps a page in a specific page directory.
+            // It will map it as a page table in the current page directory.
+            // It will clean up after itself, restoring the original mapping if there was one.
+            __attribute__((optimize("O0"))) int MapPage(uint32_t phys, uint32_t virt, uint32_t pagedirectory) {
+                volatile uint32_t* current_pd = (volatile uint32_t*)0xFFFFF000;
+                volatile uint32_t current_mapping = current_pd[1022];
+                current_pd[1022] = pagedirectory | 0b11; // Map that page
+                asm volatile("mov %%cr3, %%eax; mov %%eax, %%cr3;" : : : "eax");
+                volatile uint32_t* pd = (volatile uint32_t*)0xFFBFF000;
+                volatile uint32_t* page_table = (volatile uint32_t*)(0xFF800000 + (0x1000 * (virt >> 22)));
+                if(!(pd[virt >> 22] & 1)) {
+                    // It doesnt, create it
+                    pd[virt >> 22] = (uint32_t)PageFrameAllocator::AllocatePage() | 0b11;
+                    // Flush the tlb entry
+                    asm volatile("invlpg (%0)" : : "r" ((0xFF800000 + (0x1000 * (virt >> 22)))) : "memory");
+                    // Clear it
+                    for(int i = 0; i < 1024; i++) {
+                        page_table[i] = 0;
+                    }
+                }
+                // The page table exists / was created
+                page_table[(virt >> 12) & 0x3FFF] = phys | 0b11;
+                // Restore previous mapping
+                current_pd[1022] = current_mapping;
+                // Re-invalidate the pages
+                asm volatile("mov %%cr3, %%eax; mov %%eax, %%cr3;" : : : "eax");
+                return 0;
+            }
+
+            Mapping CreatePageDirectory() {
+                // Allocate new page
+                Mapping pd = GetPage();
+
+                // Recursive-map the pd
+                ((volatile uint32_t*)(pd.virt))[1023] = pd.phys | 0b11;
+
+                // Map the kernel
+                uint32_t kernel_begin_address = (uint32_t)(&kernel_begin) - KernelVirtualBase;
+                uint32_t kernel_end_address = (uint32_t)(&kernel_end) - KernelVirtualBase;
+
+                for(uint32_t curr_adr = kernel_begin_address; curr_adr <= kernel_end_address; curr_adr += 4 * 1024) {
+                    MapPage(curr_adr, curr_adr + KernelVirtualBase, pd.phys);
+                }
+                return pd;
             }
 
             int CheckIfPageIsMapped(uint32_t adr) {
@@ -141,13 +189,7 @@ namespace Kernel {
 
             int InitVM() {
                 // The page frame allocator should be setup now
-                // We will use kmalloc() directly to allocate the page directory
                 // For the actual page tables we want to allocate physical pages
-                PageDirectory = (uint32_t*)kmalloc_imp(1024 * 32, 0x1FFFFF); // Page aligned
-                if(PageDirectory == nullptr) {
-                    debug_puts("Could not allocate page directory!");
-                    while(1);
-                }
                 // Zero that shit
                 for(int i = 0; i < 1024; i++) {
                     PageDirectory[i] = 0;
@@ -175,12 +217,12 @@ namespace Kernel {
             static uint32_t check_page_begin = 0xD0000000;
             // We stop allocations here.
             static uint32_t max_allocated_pages = 0xE0000000;
-            void* GetPage() {
+            Mapping GetPage() {
                 while(check_page_begin < max_allocated_pages) {
                     // Check page
                     uint32_t virt_page = check_page_begin;
                     check_page_begin += 4 * 1024;
-                    if(CheckIfPageIsMapped(check_page_begin)) {
+                    if(CheckIfPageIsMapped(virt_page)) {
                         // This page is mapped,  and continue
                         continue;
                     }
@@ -189,10 +231,18 @@ namespace Kernel {
                     if(physical_page == 0) { panic("Could not allocate physical page"); }
                     // Now map that page
                     MapPage(physical_page, virt_page);
-                    return (void*)virt_page;
+                    // Crate Mapping object and return
+                    Mapping mapped;
+                    mapped.phys = physical_page;
+                    mapped.virt = virt_page;
+                    return mapped;
                 }
                 asm volatile("cli; hlt");
-                return NULL; // will never happen
+            }
+
+            
+            Mapping GetUserPage(int count) {
+                
             }
         }
     }

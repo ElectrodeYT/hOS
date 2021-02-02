@@ -26,10 +26,25 @@ namespace Kernel {
         }
 
         namespace VirtualMemory {
+            // Virtual memory mapping
+            struct Mapping {
+                uint32_t phys;
+                uint32_t virt;
+            };
+
             int CheckIfPageIsMapped(uint32_t adr);
             int InitVM();
-            void* GetPage();
+            Mapping GetPage();
+
+
+
+            int MapPage(uint32_t phys, uint32_t virt, uint32_t pagedirectory);
             int MapPage(uint32_t phys, uint32_t virt);
+            int UnmapPage(uint32_t virt);
+            
+            void SetPageDirectory();
+            // Creates a new page directory.
+            Mapping CreatePageDirectory();
         }
     }
 }

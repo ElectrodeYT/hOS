@@ -5,7 +5,6 @@
 
 namespace Kernel {
     namespace GDT {
-
         struct __attribute__((packed)) __attribute__((aligned(0x1000))) GDTPointer {
             volatile uint16_t size;
             volatile uint32_t adr;
@@ -100,6 +99,49 @@ namespace Kernel {
             idt_pointer.size = 8 * 256 - 1;
             // Some inline assembly to load the IDT
             asm volatile("lidt %0" : : "m"(idt_pointer));
+        }
+    }
+    namespace TSS {
+        struct __attribute__((packed))  __attribute__((aligned(0x1000))) TSS {
+            uint16_t link; uint16_t res_1;
+            uint32_t esp0;
+            uint16_t ss0; uint16_t res_2;
+            uint32_t esp1;
+            uint16_t ss1; uint16_t res_3;
+            uint32_t esp2;
+            uint16_t ss2; uint16_t res_4;
+            uint32_t cr3;
+            uint32_t eip;
+            uint32_t eflags;
+            uint32_t eax;
+            uint32_t ecx;
+            uint32_t edx;
+            uint32_t ebx;
+            uint32_t esp;
+            uint32_t ebp;
+            uint32_t esi;
+            uint32_t edi;
+            uint16_t es; uint16_t res_5;
+            uint16_t cs; uint16_t res_6;
+            uint16_t ss; uint16_t res_7;
+            uint16_t ds; uint16_t res_8;
+            uint16_t fs; uint16_t res_9;
+            uint16_t gs; uint16_t res_10;
+            uint16_t ldts; uint16_t res_11;
+            uint16_t res_12; uint16_t iopb_offset;            
+        };
+
+        static TSS tss;
+
+        void InitTSS() {
+            // Set some shit
+            tss.ss0 = 0x10;
+            tss.iopb_offset = 104;
+            // We allocate a new stack for interrupts
+            // We dont really care where it is in virtual memory, so we dont save it
+            tss.esp0 = MemoryManager::VirtualMemory::GetPage().virt;
+            GDT::SetSegment(&(GDT::gdt.TSS), 104, (uint32_t)&tss, 0x89);
+            asm volatile("ltr %%ax" : : "a"(0x28));
         }
     }
 }
