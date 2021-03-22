@@ -5,23 +5,23 @@ base_folder := ../../
 kernel := hKern.elf
 image := hOS.img
 
-cd_root := boot/cd-root
-
-cd_root_kernel := $(cd_root)/boot/kernel.elf
+limine_config := boot/limine.cfg
 
 .PHONY: create-image qemu
 
 create-image $(image): $(kernel)
-	@# Copy relevant files into cdrom-root
-	@echo [COPY] $(kernel)
-	@cp $(kernel) $(cd_root_kernel)
-
-	@# Create ISO with grubmkrescue
-	@echo [ISO] $(image)
-	@grub-mkrescue $(cd_root) -o $(image)
+	@# Create the image
+	@rm -f $(image)
+	@dd if=/dev/zero bs=1M count=0 seek=64 of=$(image)
+	@parted -s $(image) mklabel gpt
+	@parted -s $(image) mkpart primary 2048s 100%
+	@echfs-utils -g -p0 $(image) quick-format 512
+	@echfs-utils -g -p0 $(image) import $(kernel) kernel.elf
+	@echfs-utils -g -p0 $(image) import $(limine_config) limine.cfg
+	@limine-install $(image)
 
 qemu: $(image)
-	@qemu-system-x86_64 -cdrom $(image) -m 256
+	@qemu-system-x86_64 -hda $(image) -m 256
 
 qemu-debug: $(image)
 	@gdb -x boot/gdb.gdb -tui
