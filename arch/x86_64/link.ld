@@ -29,4 +29,8 @@ SECTIONS
         *(COMMON)
         *(.bss*)
     }
+
+    .heap : {
+        KEEP(*(.heap*))
+    }
 }

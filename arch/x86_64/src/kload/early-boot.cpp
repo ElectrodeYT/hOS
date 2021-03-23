@@ -86,6 +86,7 @@ gdt_pointer_t gdt_pointer_desc __attribute__((aligned(4 * 1024)));
 
 extern "C" void flush_segments();
 
+// Add descriptor in gdt
 void add_gdt_descriptor(uint32_t base, uint32_t limit, uint8_t access, uint8_t flags) {
     gdt_data[gdt_pointer++] = limit & 0xFF;
     gdt_data[gdt_pointer++] = (limit >> 8) & 0xFF;
@@ -97,6 +98,7 @@ void add_gdt_descriptor(uint32_t base, uint32_t limit, uint8_t access, uint8_t f
     gdt_data[gdt_pointer++] = (base >> 24) & 0xFF;
 }
 
+// Load the gdt
 void load_gdt() {
     add_gdt_descriptor(0, 0, 0, 0);
     add_gdt_descriptor(0, UINT32_MAX, 0b10011010, 0b10100000); // Kernel code
