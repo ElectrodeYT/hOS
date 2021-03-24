@@ -1,6 +1,9 @@
 #ifndef __STIVALE__STIVALE2_H__
 #define __STIVALE__STIVALE2_H__
 
+//////// This header is not part of the hOS Project.
+
+
 #include <stdint.h>
 
 struct stivale2_tag {
