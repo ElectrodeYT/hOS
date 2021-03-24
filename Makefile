@@ -5,7 +5,7 @@ CPP := $(ARCH)-elf-g++
 AS := $(ARCH)-elf-as
 
 C_ARGS := -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -O2 -Wall -Wextra -pedantic -g -Iarch/$(ARCH)/inc -Iagnostic/inc
-CPP_ARGS := -ffreestanding -O2 -Wall -Wextra -pedantic -fno-exceptions -fno-rtti -mno-mmx -mno-sse -mno-sse2 -mno-sse3 -mno-3dnow -mgeneral-regs-only -mno-red-zone -fno-stack-protector -fPIC -g -Iarch/$(ARCH)/inc -Iagnostic/inc
+CPP_ARGS := -ffreestanding -O2 -Wall -Wextra -pedantic -fno-exceptions -fno-rtti -mno-mmx -mno-sse -mno-sse2 -mno-sse3 -mno-3dnow -mgeneral-regs-only -mno-red-zone -fno-stack-protector -fPIC -g -std=c++2a -Iarch/$(ARCH)/inc -Iagnostic/inc
 AS_ARGS := -g
 
 assembly := $(shell find arch/$(ARCH)/src/asm/ -name *.s)

@@ -18,4 +18,22 @@ void operator delete[](void* p) {
     kheap_free(p);
 }
 
+
+// (void)(idk) is to supress unused parameter warnings
+void operator delete(void* p, unsigned long idk) {
+    (void)(idk);
+    kheap_free(p);
+}
+
+void operator delete[](void* p, unsigned long idk) {
+    (void)(idk);
+    kheap_free(p);
+}
+
+void memset(void* dst, uint8_t val, unsigned long size) {
+    for(unsigned long i = 0; i < size; i++) {
+        *(uint8_t*)((uint64_t)dst + i) = val;
+    }
+}
+
 #endif

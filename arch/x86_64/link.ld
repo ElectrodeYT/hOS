@@ -18,6 +18,12 @@ SECTIONS
     }
 
     .rodata : {
+        start_ctors = .;
+        *(SORT(.ctors*))
+        end_ctors = .;
+        start_dtors = .;
+        *(SORT(.dtors*))
+        end_dtors = .;
         *(.rodata*)
     }
 

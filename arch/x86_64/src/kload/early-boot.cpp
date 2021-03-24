@@ -112,7 +112,3 @@ void load_gdt() {
 
     flush_segments();
 }
-
-void set_tss_adr(uint64_t adr) {
-
-}

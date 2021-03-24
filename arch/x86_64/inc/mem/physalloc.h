@@ -17,6 +17,7 @@ struct physmem_ll {
     #define PHYSMEM_LL_TYPE_BAD 4           // Existing, but bad memory
     #define PHYSMEM_LL_TYPE_KERNEL 5        // Kernel location
     #define PHYSMEM_LL_TYPE_BOOTLOADER 6    // Bootloader data
+    #define PHYSMEM_LL_TYPE_LOWMEM 7        // Low memory area
     uint8_t type;
     // Allocation bitmap
     uint8_t* bitmap;
@@ -25,5 +26,7 @@ struct physmem_ll {
 } __attribute__((packed));
 
 void __init_physical_allocator(physmem_ll* memory_map);
+void* __physmem_allocate_page(int count = 1);
+void __physmem_free_page(void* page, int count = 1);
 
 #endif

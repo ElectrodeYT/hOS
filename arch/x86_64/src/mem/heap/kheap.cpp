@@ -35,7 +35,7 @@ void* kheap_alloc(size_t size) {
                 goto fail;
             }
             // This place should work, calculate pointer
-            void* return_val = (void*)curr + sizeof(kheap_ll);
+            void* return_val = (void*)((uint64_t)curr + sizeof(kheap_ll));
             // Create next linked list
             curr->type = KHEAP_LL_TYPE_USED;
             // Check if its even worth or possible to create the next linked list
@@ -44,7 +44,7 @@ void* kheap_alloc(size_t size) {
                 return return_val;
             }
             // Calculate the location of the next linked list
-            kheap_ll* next_ll = (kheap_ll*)((void*)curr + size + sizeof(kheap_ll)); // Convert curr to void* to avoid a nasty bug
+            kheap_ll* next_ll = (kheap_ll*)((void*)((uint64_t)curr + size + sizeof(kheap_ll))); // Convert curr to void* to avoid a nasty bug
             next_ll->next = curr->next;
             next_ll->size = curr->size - size - sizeof(kheap_ll);
             next_ll->type = KHEAP_LL_TYPE_FREE;
@@ -62,7 +62,7 @@ void* kheap_alloc(size_t size) {
 void kheap_free(void* adr) {
     if(heap_initialized == false) { for(;;); }
     // Calculate ll address
-    kheap_ll* ll = (kheap_ll*)(adr - sizeof(kheap_ll));
+    kheap_ll* ll = (kheap_ll*)((uint64_t)adr - sizeof(kheap_ll));
     // Set type to free
     ll->type = KHEAP_LL_TYPE_FREE;
     // Check wether the next block is directly after it (allows for heap expansion)
