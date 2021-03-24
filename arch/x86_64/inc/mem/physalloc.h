@@ -18,6 +18,8 @@ struct physmem_ll {
     #define PHYSMEM_LL_TYPE_KERNEL 5        // Kernel location
     #define PHYSMEM_LL_TYPE_BOOTLOADER 6    // Bootloader data
     uint8_t type;
+    // Allocation bitmap
+    uint8_t* bitmap;
     // Next entry in the list
     physmem_ll* next;
 } __attribute__((packed));
