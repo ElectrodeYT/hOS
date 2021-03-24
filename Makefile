@@ -10,7 +10,7 @@ AS_ARGS := -g
 
 assembly := $(shell find arch/$(ARCH)/src/asm/ -name *.s)
 c := $(shell find arch/$(ARCH)/src/ agnostic/src/ -name *.c)
-cpp := $(shell find arch/$(ARCH)/src/ -name *.cpp)
+cpp := $(shell find arch/$(ARCH)/src/ agnostic/src/ -name *.cpp)
 
 assembly_o := $(filter-out crtn.o,$(filter-out crti.o,$(assembly:%.s=%.o)))
 
