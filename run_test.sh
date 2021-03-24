@@ -2,6 +2,6 @@
 
 # wow such complicated
 make clean
-make qemu-debug; true
+trap '' INT; make qemu-debug; true
 make clean
 make cloc

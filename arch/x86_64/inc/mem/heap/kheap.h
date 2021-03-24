@@ -7,5 +7,6 @@
 
 void* kheap_alloc(size_t size);
 void kheap_free(void* adr);
+void kheap_init();
 
 #endif
