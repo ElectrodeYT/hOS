@@ -2,7 +2,9 @@
 #define __STIVALE__STIVALE2_H__
 
 //////// This header is not part of the hOS Project.
-
+// This pragma was added as this header is not C++ compliant, but can still be compiled and will work fine.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 
 #include <stdint.h>
 
@@ -172,5 +174,7 @@ struct stivale2_struct_tag_pxe_server_info {
     struct stivale2_tag tag;
     uint32_t server_ip;
 } __attribute__((packed));
+
+#pragma GCC diagnostic pop
 
 #endif
