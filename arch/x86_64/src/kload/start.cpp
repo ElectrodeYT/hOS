@@ -5,6 +5,7 @@
 #include <mem.h>
 #include <mem/physalloc.h>
 #include <mem/virtmem.h>
+#include <debug/serial.h>
 #include <kmain.h>
 
 typedef void (*ctor_constructor)();
@@ -12,7 +13,7 @@ extern "C" ctor_constructor start_ctors;
 extern "C" ctor_constructor end_ctors;
 
 // The following will be our kernel's entry point.
-extern "C" void _start(struct stivale2_struct *stivale2_struct) {
+extern "C" void __attribute__((optimize("O0"))) _start(struct stivale2_struct *stivale2_struct) {
     // We are in a very limited enviroment right now, including the fact that the kernel heap doesnt work yet
     // (on purpose, to prevent undef. behaviour incase we accidentally call it)
 
@@ -72,13 +73,13 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     // Now initialize the physical memory allocator
     __init_physical_allocator(physical_mem_ll);
 
+    // Initialize virtual memory
+    __init_virtual_memory();
+
     // Call the global constructors
     for (ctor_constructor* ctor = &start_ctors; ctor < &end_ctors; ctor++) {
         (*ctor)();
     }
-
-    // Initialize virtual memory
-    __init_virtual_memory();
 
     // Map kernel
     uint64_t kernel_phys_begin = (kernel_mapping->base & 0xFFFFFFFFFF000);
@@ -96,6 +97,12 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
 
     // We can now switch to the new page table
     __virtmem_switch_page_tables();
+
+    // We are in a much safer place now; dereferencing null pointers will for example now crash, before it would have been identity mapped to physical memory.
+    // We can also setup simple debug output, and initialize the panic function (errors previously would have simply crashed the system)
+
+    // Setup serial debug output
+    __init_serial();
 
     // Basic init has occured, we can call the main now
     Kernel::KernelMain();
