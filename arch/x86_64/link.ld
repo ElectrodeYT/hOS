@@ -36,10 +36,6 @@ SECTIONS
         *(.bss*)
     }
 
-    .idt : ALIGN(4096) {
-        KEEP(*(.idt*))
-    }
-
     .heap : {
         KEEP(*(.heap*))
     }

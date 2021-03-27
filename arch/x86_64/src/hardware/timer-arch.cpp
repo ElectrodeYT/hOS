@@ -28,7 +28,7 @@ namespace Kernel {
                 outb(channel0, (divisor >> 8) & 0xFF);
 
                 // Attach interrupt
-                Interrupts::RegisterIRQHandler(0, ArchTimerInterrupt);
+                Interrupts::the().RegisterIRQHandler(0, ArchTimerInterrupt);
                 // Reenable interupts
                 asm volatile("sti");
             }

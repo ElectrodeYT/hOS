@@ -73,16 +73,17 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
             kernel_mapping = &(memmap_tag->memmap[i]);
         }
     }
-    // Now initialize the physical memory allocator
-    __init_physical_allocator(physical_mem_ll);
-
-    // Initialize virtual memory
-    Kernel::VirtualMemory::Init();
 
     // Call the global constructors
     for (ctor_constructor* ctor = &start_ctors; ctor < &end_ctors; ctor++) {
         (*ctor)();
     }
+
+    // Now initialize the physical memory allocator
+    __init_physical_allocator(physical_mem_ll);
+
+    // Initialize virtual memory
+    Kernel::VirtualMemory::the().Init();
 
     // Map kernel
     uint64_t kernel_phys_begin = (kernel_mapping->base & 0xFFFFFFFFFF000);
@@ -94,12 +95,12 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     if((kernel_mapping->base + kernel_mapping->length) & 0xFFF) { kernel_phys_end += 4 * 1024; }
 
     for(uint64_t current_map = kernel_phys_begin; current_map < kernel_phys_end; current_map += 4 * 1024) {
-        Kernel::VirtualMemory::MapPageEarly(current_map, kernel_virt_begin);
+        Kernel::VirtualMemory::the().MapPageEarly(current_map, kernel_virt_begin);
         kernel_virt_begin += 4 * 1024;
     }
 
     // We can now switch to the new page table
-    Kernel::VirtualMemory::SwitchPageTables();
+    Kernel::VirtualMemory::the().SwitchPageTables();
 
 
     // We are in a much safer place now; dereferencing null pointers will for example now crash, before it would have been identity mapped to physical memory.
@@ -112,7 +113,7 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     load_tss();
 
     // Initalize Interrupts
-    Kernel::Interrupts::InitInterrupts();
+    Kernel::Interrupts::the().InitInterrupts();
 
     // Basic init has occured, we can call the main now
     Kernel::KernelMain();

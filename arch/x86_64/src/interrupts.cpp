@@ -60,186 +60,174 @@ extern "C" void irq15();
 
 // C-to-Cpp function jump basically
 extern "C" void isr_main(Kernel::Interrupts::ISRRegisters* registers) {
-    Kernel::Interrupts::HandleISR(registers);
+    Kernel::Interrupts::the().HandleISR(registers);
 }
 
 // TODO
 extern "C" void irq_main(Kernel::Interrupts::ISRRegisters* registers) {
-    Kernel::Interrupts::HandleIRQ(registers);
+    Kernel::Interrupts::the().HandleIRQ(registers);
 }
 
 namespace Kernel {
-    namespace Interrupts {
+    void Interrupts::HandleISR(Interrupts::ISRRegisters* registers) {
+        // Determine which interrupt handler we need to call
+        switch(registers->int_num) {
+            case ExceptionID::PageFault: {
+                Debug::SerialPrint("PAGE FAULT\n\rError: ");
 
-        void HandleISR(ISRRegisters* registers) {
-            // Determine which interrupt handler we need to call
-            switch(registers->int_num) {
-                case ExceptionID::PageFault: {
-                    Debug::SerialPrint("PAGE FAULT\n\rError: ");
-
-                    // Decode error
-                    if(registers->error & 1) {
-                        Debug::SerialPrint("Present ");
-                    }
-                    if(registers->error & 0b10) {
-                        Debug::SerialPrint("Write ");
-                    }
-                    if(registers->error & 0b100) {
-                        Debug::SerialPrint("User ");
-                    }
-                    if(registers->error & 0b1000) {
-                        Debug::SerialPrint("ReservedWrite ");
-                    }
-                    if(registers->error & 0b10000) {
-                        Debug::SerialPrint("InstructionFetch ");
-                    }
-
-                    // Make new line and print the faulting address
-                    Debug::SerialPrint("\n\r");
-                    Debug::SerialPrint("Faulting address: ");
-                    uint64_t faulting;
-                    // Get the faulting address from cr2
-                    asm volatile("movq %%cr2, %0" : "=r"(faulting));
-                    Debug::SerialPrintInt(faulting, 16);
-
-                    // Make a new line
-                    Debug::SerialPrint("\n\r");
-                    // Crash
-                    Debug::Panic("Unrecoverable page fault");
+                // Decode error
+                if(registers->error & 1) {
+                    Debug::SerialPrint("Present ");
                 }
-                case ExceptionID::GeneralProtectionFault: {
-                    Debug::SerialPrint("GENERAL PROTECTION FAULT\n\r");
-                    Debug::SerialPrint("Error code: "); Debug::SerialPrintInt(registers->error, 10);
-                    Debug::SerialPrint("\n\rFaulting RIP: "); Debug::SerialPrintInt(registers->rip, 16); Debug::SerialPrint("\n\r");
-                    Kernel::Debug::Panic("General protection fault");
+                if(registers->error & 0b10) {
+                    Debug::SerialPrint("Write ");
                 }
-                default: {
-                    Debug::SerialPrint("UNHANDLED INTERRUPT: "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
-                    Debug::Panic("interrupt not handled");
+                if(registers->error & 0b100) {
+                    Debug::SerialPrint("User ");
                 }
+                if(registers->error & 0b1000) {
+                    Debug::SerialPrint("ReservedWrite ");
+                }
+                if(registers->error & 0b10000) {
+                    Debug::SerialPrint("InstructionFetch ");
+                }
+
+                // Make new line and print the faulting address
+                Debug::SerialPrint("\n\r");
+                Debug::SerialPrint("Faulting address: ");
+                uint64_t faulting;
+                // Get the faulting address from cr2
+                asm volatile("movq %%cr2, %0" : "=r"(faulting));
+                Debug::SerialPrintInt(faulting, 16);
+
+                // Make a new line
+                Debug::SerialPrint("\n\r");
+                // Crash
+                Debug::Panic("Unrecoverable page fault");
             }
-        }
-
-        // Registered IRQ Handlers
-        static irq_handler_t irq_handlers[16];
-
-        void RegisterIRQHandler(int irq_number, irq_handler_t handler) {
-            if(irq_number >= 16) {
-                Debug::Panic("invalid irq");
+            case ExceptionID::GeneralProtectionFault: {
+                Debug::SerialPrint("GENERAL PROTECTION FAULT\n\r");
+                Debug::SerialPrint("Error code: "); Debug::SerialPrintInt(registers->error, 10);
+                Debug::SerialPrint("\n\rFaulting RIP: "); Debug::SerialPrintInt(registers->rip, 16); Debug::SerialPrint("\n\r");
+                Kernel::Debug::Panic("General protection fault");
             }
-            irq_handlers[irq_number] = handler;
-        }
-
-        void HandleIRQ(ISRRegisters* registers) {
-            // Check if a handler exists
-            if(irq_handlers[registers->int_num] == NULL) {
-                Debug::SerialPrint("irq: no handler registered for irq "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
-            } else {
-                irq_handlers[registers->int_num](registers);
+            default: {
+                Debug::SerialPrint("UNHANDLED INTERRUPT: "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
+                Debug::Panic("interrupt not handled");
             }
-            // Debug::SerialPrint("Got interrupt "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
-        
-            // Send EOI
-            if(registers->int_num >= 8) { outb(pic2_io_data, 0x20); }
-            outb(pic1_io_command, 0x20);
-        }
-
-        struct IDTPointer {
-            uint16_t size;
-            uint64_t base;
-        }__attribute__((packed));
-
-        static IDTDescr idt[256] __attribute__((section(".idt")));
-        static IDTPointer idt_pointer;
-
-        void CreateEntry(int entry, void(*handler)(), uint8_t options) {
-            idt[entry].offset_1 = (uint64_t)handler & 0xFFFF;
-            idt[entry].offset_2 = ((uint64_t)handler >> 16) & 0xFFFF;
-            idt[entry].offset_3 = ((uint64_t)handler >> 32) & 0xFFFFFFFF;
-            idt[entry].ist = 0;
-            idt[entry].selector = 0x8;
-            idt[entry].type_attr = options;
-            idt[entry].zero = 0;
-        }
-
-        void InitInterrupts() {
-            // Remap the PIC
-            // This should map all IRQs beginning at 32 dec.
-            outb(0x20, 0x11);
-            outb(0xA0, 0x11);
-            outb(0x21, 0x20);
-            outb(0xA1, 40);
-            outb(0x21, 0x04);
-            outb(0xA1, 0x02);
-            outb(0x21, 0x01);
-            outb(0xA1, 0x01);
-            outb(0x21, 0x0);
-            outb(0xA1, 0x0);
-
-            // Create all the IDT entries
-            memset((void*)idt, 0x00, sizeof(idt));
-
-            // Interrupts
-            CreateEntry(0, isr0, InterruptGate);
-            CreateEntry(1, isr1, InterruptGate);
-            CreateEntry(2, isr2, InterruptGate);
-            CreateEntry(3, isr3, InterruptGate);
-            CreateEntry(4, isr4, InterruptGate);
-            CreateEntry(5, isr5, InterruptGate);
-            CreateEntry(6, isr6, InterruptGate);
-            CreateEntry(7, isr7, InterruptGate);
-            CreateEntry(8, isr8, InterruptGate);
-            CreateEntry(9, isr9, InterruptGate);
-            CreateEntry(10, isr10, InterruptGate);
-            CreateEntry(11, isr11, InterruptGate);
-            CreateEntry(12, isr12, InterruptGate);
-            CreateEntry(13, isr13, InterruptGate);
-            CreateEntry(14, isr14, InterruptGate);
-            CreateEntry(15, isr15, InterruptGate);
-            CreateEntry(16, isr16, InterruptGate);
-            CreateEntry(17, isr17, InterruptGate);
-            CreateEntry(18, isr18, InterruptGate);
-            CreateEntry(19, isr19, InterruptGate);
-            CreateEntry(20, isr20, InterruptGate);
-            CreateEntry(21, isr21, InterruptGate);
-            CreateEntry(22, isr22, InterruptGate);
-            CreateEntry(23, isr23, InterruptGate);
-            CreateEntry(24, isr24, InterruptGate);
-            CreateEntry(25, isr25, InterruptGate);
-            CreateEntry(26, isr26, InterruptGate);
-            CreateEntry(27, isr27, InterruptGate);
-            CreateEntry(28, isr28, InterruptGate);
-            CreateEntry(29, isr29, InterruptGate);
-            CreateEntry(30, isr30, InterruptGate);
-            CreateEntry(31, isr31, InterruptGate);
-
-            // IRQs
-            CreateEntry(32, irq0, InterruptGate);
-            CreateEntry(33, irq1, InterruptGate);
-            CreateEntry(34, irq2, InterruptGate);
-            CreateEntry(35, irq3, InterruptGate);
-            CreateEntry(36, irq4, InterruptGate);
-            CreateEntry(37, irq5, InterruptGate);
-            CreateEntry(38, irq6, InterruptGate);
-            CreateEntry(39, irq7, InterruptGate);
-            CreateEntry(40, irq8, InterruptGate);
-            CreateEntry(41, irq9, InterruptGate);
-            CreateEntry(42, irq10, InterruptGate);
-            CreateEntry(43, irq11, InterruptGate);
-            CreateEntry(44, irq12, InterruptGate);
-            CreateEntry(45, irq13, InterruptGate);
-            CreateEntry(46, irq14, InterruptGate);
-            CreateEntry(47, irq15, InterruptGate);
-
-            // Setup IDT pointer
-            idt_pointer.base = (uint64_t)&idt;
-            idt_pointer.size = sizeof(idt);
-
-            // Load it
-            asm volatile("lidt %0" : : "m" (idt_pointer));
-
-            // Zero the IRQ Handlers
-            memset((void*)irq_handlers, 0x00, sizeof(irq_handlers));
         }
     }
+
+
+    void Interrupts::RegisterIRQHandler(int irq_number, irq_handler_t handler) {
+        if(irq_number >= 16) {
+            Debug::Panic("invalid irq");
+        }
+        irq_handlers[irq_number] = handler;
+    }
+
+    void Interrupts::HandleIRQ(ISRRegisters* registers) {
+        // Check if a handler exists
+        if(irq_handlers[registers->int_num] == NULL) {
+            Debug::SerialPrint("irq: no handler registered for irq "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
+        } else {
+            irq_handlers[registers->int_num](registers);
+        }
+        // Debug::SerialPrint("Got interrupt "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
+    
+        // Send EOI
+        if(registers->int_num >= 8) { outb(pic2_io_data, 0x20); }
+        outb(pic1_io_command, 0x20);
+    }
+
+    void Interrupts::CreateEntry(int entry, void(*handler)(), uint8_t options) {
+        idt[entry].offset_1 = (uint64_t)handler & 0xFFFF;
+        idt[entry].offset_2 = ((uint64_t)handler >> 16) & 0xFFFF;
+        idt[entry].offset_3 = ((uint64_t)handler >> 32) & 0xFFFFFFFF;
+        idt[entry].ist = 0;
+        idt[entry].selector = 0x8;
+        idt[entry].type_attr = options;
+        idt[entry].zero = 0;
+    }
+
+    void Interrupts::InitInterrupts() {
+        // Remap the PIC
+        // This should map all IRQs beginning at 32 dec.
+        outb(0x20, 0x11);
+        outb(0xA0, 0x11);
+        outb(0x21, 0x20);
+        outb(0xA1, 40);
+        outb(0x21, 0x04);
+        outb(0xA1, 0x02);
+        outb(0x21, 0x01);
+        outb(0xA1, 0x01);
+        outb(0x21, 0x0);
+        outb(0xA1, 0x0);
+
+        // Create all the IDT entries
+        memset((void*)idt, 0x00, sizeof(idt));
+
+        // Interrupts
+        CreateEntry(0, isr0, InterruptGate);
+        CreateEntry(1, isr1, InterruptGate);
+        CreateEntry(2, isr2, InterruptGate);
+        CreateEntry(3, isr3, InterruptGate);
+        CreateEntry(4, isr4, InterruptGate);
+        CreateEntry(5, isr5, InterruptGate);
+        CreateEntry(6, isr6, InterruptGate);
+        CreateEntry(7, isr7, InterruptGate);
+        CreateEntry(8, isr8, InterruptGate);
+        CreateEntry(9, isr9, InterruptGate);
+        CreateEntry(10, isr10, InterruptGate);
+        CreateEntry(11, isr11, InterruptGate);
+        CreateEntry(12, isr12, InterruptGate);
+        CreateEntry(13, isr13, InterruptGate);
+        CreateEntry(14, isr14, InterruptGate);
+        CreateEntry(15, isr15, InterruptGate);
+        CreateEntry(16, isr16, InterruptGate);
+        CreateEntry(17, isr17, InterruptGate);
+        CreateEntry(18, isr18, InterruptGate);
+        CreateEntry(19, isr19, InterruptGate);
+        CreateEntry(20, isr20, InterruptGate);
+        CreateEntry(21, isr21, InterruptGate);
+        CreateEntry(22, isr22, InterruptGate);
+        CreateEntry(23, isr23, InterruptGate);
+        CreateEntry(24, isr24, InterruptGate);
+        CreateEntry(25, isr25, InterruptGate);
+        CreateEntry(26, isr26, InterruptGate);
+        CreateEntry(27, isr27, InterruptGate);
+        CreateEntry(28, isr28, InterruptGate);
+        CreateEntry(29, isr29, InterruptGate);
+        CreateEntry(30, isr30, InterruptGate);
+        CreateEntry(31, isr31, InterruptGate);
+
+        // IRQs
+        CreateEntry(32, irq0, InterruptGate);
+        CreateEntry(33, irq1, InterruptGate);
+        CreateEntry(34, irq2, InterruptGate);
+        CreateEntry(35, irq3, InterruptGate);
+        CreateEntry(36, irq4, InterruptGate);
+        CreateEntry(37, irq5, InterruptGate);
+        CreateEntry(38, irq6, InterruptGate);
+        CreateEntry(39, irq7, InterruptGate);
+        CreateEntry(40, irq8, InterruptGate);
+        CreateEntry(41, irq9, InterruptGate);
+        CreateEntry(42, irq10, InterruptGate);
+        CreateEntry(43, irq11, InterruptGate);
+        CreateEntry(44, irq12, InterruptGate);
+        CreateEntry(45, irq13, InterruptGate);
+        CreateEntry(46, irq14, InterruptGate);
+        CreateEntry(47, irq15, InterruptGate);
+
+        // Setup IDT pointer
+        idt_pointer.base = (uint64_t)&idt;
+        idt_pointer.size = sizeof(idt);
+
+        // Load it
+        asm volatile("lidt %0" : : "m" (idt_pointer));
+
+        // Zero the IRQ Handlers
+        memset((void*)irq_handlers, 0x00, sizeof(irq_handlers));
+    }
+
 }

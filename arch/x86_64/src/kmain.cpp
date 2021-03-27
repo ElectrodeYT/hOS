@@ -17,8 +17,8 @@ namespace Kernel {
         // TODO: Scheduler
 
         // Test new page table getting
-        uint64_t new_page = VirtualMemory::CreateNewPageTable();
-        VirtualMemory::SwitchPageTables(new_page);
+        uint64_t new_page = VirtualMemory::the().CreateNewPageTable();
+        VirtualMemory::the().SwitchPageTables(new_page);
         for(;;);
     }
 }
