@@ -3,7 +3,7 @@
 
 namespace Kernel {
     namespace Debug {
-        void Panic(const char* error);
+        void __attribute__((noreturn)) Panic(const char* error);
     }
 }
 
