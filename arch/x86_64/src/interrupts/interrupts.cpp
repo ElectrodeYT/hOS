@@ -2,6 +2,7 @@
 #include <hardware/instructions.h>
 #include <interrupts/interrupts.h>
 #include <panic.h>
+#include <debug/serial.h>
 
 // Interrupts from CPU (Page fault, GPF, ...)
 extern "C" void isr0 ();
@@ -57,20 +58,66 @@ extern "C" void irq15();
 
 
 
-// TODO
+// C-to-Cpp function jump basically
 extern "C" void isr_main(Kernel::Interrupts::ISRRegisters* registers) {
-    Kernel::Debug::Panic("ISR stub");
-    (void)registers;
+    Kernel::Interrupts::HandleISR(registers);
 }
 
 // TODO
 extern "C" void irq_main(Kernel::Interrupts::ISRRegisters* registers) {
-    Kernel::Debug::Panic("IRQ stub");
-    (void)registers;
+    Kernel::Interrupts::HandleIRQ(registers);
 }
 
 namespace Kernel {
     namespace Interrupts {
+
+        void HandleISR(ISRRegisters* registers) {
+            // Determine which interrupt handler we need to call
+            switch(registers->int_num) {
+                case ExceptionID::PageFault: {
+                    Debug::SerialPrint("PAGE FAULT\n\rError: ");
+
+                    // Decode error
+                    if(registers->error & 1) {
+                        Debug::SerialPrint("Present ");
+                    }
+                    if(registers->error & 0b10) {
+                        Debug::SerialPrint("Write ");
+                    }
+                    if(registers->error & 0b100) {
+                        Debug::SerialPrint("User ");
+                    }
+                    if(registers->error & 0b1000) {
+                        Debug::SerialPrint("ReservedWrite ");
+                    }
+                    if(registers->error & 0b10000) {
+                        Debug::SerialPrint("InstructionFetch ");
+                    }
+
+                    // Make new line and print the faulting address
+                    Debug::SerialPrint("\n\r");
+                    Debug::SerialPrint("Faulting address: ");
+                    uint64_t faulting;
+                    // Get the faulting address from cr2
+                    asm volatile("movq %%cr2, %0" : "=r"(faulting));
+                    Debug::SerialPrintInt(faulting, 16);
+
+                    // Make a new line
+                    Debug::SerialPrint("\n\r");
+                    // Crash
+                    Debug::Panic("Unrecoverable page fault");
+                }
+                default: {
+                    Debug::SerialPrint("UNHANDLED INTERRUPT: "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
+                    Debug::Panic("interrupt not handled");
+                }
+            }
+        }
+
+        void HandleIRQ(ISRRegisters* registers) {
+            (void)registers;
+            Kernel::Debug::Panic("IRQ stub");
+        }
 
         struct IDTPointer {
             uint16_t size;

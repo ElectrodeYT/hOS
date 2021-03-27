@@ -50,7 +50,7 @@ isr_common:
 	popq %rdx
 	popq %rsi
 	popq %rdi
-	add $8, %rsp // Info field
+	add $16, %rsp // Info, error field
 	iretq
 
 

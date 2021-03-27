@@ -26,10 +26,10 @@ namespace Kernel {
          uint64_t rdx;
          uint64_t rsi;
          uint64_t rdi;
-         // Contains error code
-         uint64_t error;
          // Contains interrupt id
          uint64_t int_num;
+         // Contains error code
+         uint64_t error;
          // Interrupt stack frame
          uint64_t rip;
          uint64_t cs;
@@ -38,13 +38,42 @@ namespace Kernel {
          uint64_t ss;
       }__attribute__((packed));
 
+      // Interrupt gate type
       const uint8_t InterruptGate = 0b10001110;
       void InitInterrupts();
 
-      // IRQ handlers
+      // Exception numbers
+      enum ExceptionID {
+         DivideByZero = 0,
+         Debug,
+         NMI,
+         Breakpoint,
+         Overflow,
+         BoundRangeExceeded,
+         InvalidOpcode,
+         DeviceNotAvailable,
+         DoubleFault,
+         CoprocessorSegmentOverrun,
+         InvalidTSS,
+         SegmentNotPresent,
+         StackSegmentFault,
+         GeneralProtectionFault,
+         PageFault,
+         x87FloatingPointException = 16,
+         AligmentCheck,
+         MachineCheck,
+         SIMDFloatingPointException,
+         VirtualizationException,
+         SecurityException = 30
+      };
+
+      // Interrupt handlers
       typedef void (*irq_handler_t)(struct ISRRegisters*);
       void RegisterIRQHandler(int irq_number, irq_handler_t handler);
 
+
+      void HandleISR(ISRRegisters* registers);
+      void HandleIRQ(ISRRegisters* registers);
    }
 }
 #endif
