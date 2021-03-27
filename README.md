@@ -1,4 +1,6 @@
 # hOS
-New OS project. Decided on a hybrid model now. Ditched the last one as i went to i686, and all of the code has changed.
+OS Project. Dont expect much lol.
+
+64 bit x86
 
 written in c++.
