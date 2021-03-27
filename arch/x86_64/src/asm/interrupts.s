@@ -19,6 +19,7 @@ isr\n:
 .align 16
 .global irq\n
 irq\n:
+	push $0 // Push fake error so that ISRRegisters can be reused
 	pushq $\n
     jmp irq_common
 .endm
@@ -79,7 +80,7 @@ irq_common:
 	popq %rdx
 	popq %rsi
 	popq %rdi
-	add $8, %rsp // Info field
+	add $16, %rsp // Info field
 	iretq
     
 int_noerr 0

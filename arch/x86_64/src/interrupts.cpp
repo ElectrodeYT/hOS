@@ -1,6 +1,6 @@
 #include <mem.h>
 #include <hardware/instructions.h>
-#include <interrupts/interrupts.h>
+#include <interrupts.h>
 #include <panic.h>
 #include <debug/serial.h>
 
@@ -107,6 +107,12 @@ namespace Kernel {
                     // Crash
                     Debug::Panic("Unrecoverable page fault");
                 }
+                case ExceptionID::GeneralProtectionFault: {
+                    Debug::SerialPrint("GENERAL PROTECTION FAULT\n\r");
+                    Debug::SerialPrint("Error code: "); Debug::SerialPrintInt(registers->error, 10);
+                    Debug::SerialPrint("\n\rFaulting RIP: "); Debug::SerialPrintInt(registers->rip, 16); Debug::SerialPrint("\n\r");
+                    Kernel::Debug::Panic("General protection fault");
+                }
                 default: {
                     Debug::SerialPrint("UNHANDLED INTERRUPT: "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
                     Debug::Panic("interrupt not handled");
@@ -114,9 +120,28 @@ namespace Kernel {
             }
         }
 
+        // Registered IRQ Handlers
+        static irq_handler_t irq_handlers[16];
+
+        void RegisterIRQHandler(int irq_number, irq_handler_t handler) {
+            if(irq_number >= 16) {
+                Debug::Panic("invalid irq");
+            }
+            irq_handlers[irq_number] = handler;
+        }
+
         void HandleIRQ(ISRRegisters* registers) {
-            (void)registers;
-            Kernel::Debug::Panic("IRQ stub");
+            // Check if a handler exists
+            if(irq_handlers[registers->int_num] == NULL) {
+                Debug::SerialPrint("irq: no handler registered for irq "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
+            } else {
+                irq_handlers[registers->int_num](registers);
+            }
+            // Debug::SerialPrint("Got interrupt "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
+        
+            // Send EOI
+            if(registers->int_num >= 8) { outb(pic2_io_data, 0x20); }
+            outb(pic1_io_command, 0x20);
         }
 
         struct IDTPointer {
@@ -212,6 +237,9 @@ namespace Kernel {
 
             // Load it
             asm volatile("lidt %0" : : "m" (idt_pointer));
+
+            // Zero the IRQ Handlers
+            memset((void*)irq_handlers, 0x00, sizeof(irq_handlers));
         }
     }
 }

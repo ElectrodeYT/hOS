@@ -71,9 +71,15 @@ namespace Kernel {
       typedef void (*irq_handler_t)(struct ISRRegisters*);
       void RegisterIRQHandler(int irq_number, irq_handler_t handler);
 
-
+      // Namespaced interrupt handlers
       void HandleISR(ISRRegisters* registers);
       void HandleIRQ(ISRRegisters* registers);
+
+      // PIC IO addresses
+      const uint16_t pic1_io_command = 0x20;
+      const uint16_t pic1_io_data = 0x21;
+      const uint16_t pic2_io_command = 0xA0;
+      const uint16_t pic2_io_data = 0xA1;
    }
 }
 #endif
