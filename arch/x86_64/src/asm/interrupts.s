@@ -37,7 +37,7 @@ isr_common:
 	pushq %r10
 	pushq %r11
 
-	mov %rdi, %rsp
+	mov %rsp, %rdi
 .extern isr_main
 	call isr_main
 	
@@ -66,7 +66,7 @@ irq_common:
 	pushq %r10
 	pushq %r11
 
-	mov %rdi, %rsp
+	mov %rsp, %rdi
 .extern irq_main
 	call irq_main
 	
