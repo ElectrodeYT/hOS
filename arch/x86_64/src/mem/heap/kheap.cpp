@@ -1,5 +1,6 @@
 #include <mem/heap/kheap.h>
 #include <stdint.h>
+#include <panic.h>
 
 // This heap implementation is slow and bad but it works for now
 // TODO: implemnt heap expansion, prefarably in the megabyte range
@@ -30,7 +31,9 @@ void* kheap_alloc(size_t size) {
         if(curr->type == KHEAP_LL_TYPE_USED) {
             fail:
             // If curr->next == NULL no more space is available
-            if(curr->next == 0) { for(;;); } // TODO: panic
+            if(curr->next == 0) {
+                Kernel::Debug::Panic("kheap: out of memory");
+            }
             curr = curr->next;
         } else {
             // Check size
