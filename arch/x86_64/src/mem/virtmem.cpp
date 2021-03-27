@@ -5,14 +5,11 @@
 
 namespace Kernel {
     namespace VirtualMemory {
-
-        // Contains the physical address of the page table.
+        // Contains the physical address of the original page table.
         uint64_t* page_table;
 
         // Define Kernel page area.
         uint8_t* kernel_page_bitmap;
-        uint64_t kernel_page_begin = 0xffffffff90000000;
-        uint64_t kernel_page_end = 0xfffffffffffff000;
 
 
         // Return the addresses of these tables
@@ -34,12 +31,40 @@ namespace Kernel {
             return (uint64_t*)(0xFFFFF87C3E1F0000 | (offset & 0x1FFF));
         }
 
+        void TagLevel3Global(unsigned long entry) {
+            // Check if the level 3 table exists
+            uint64_t* lvl4_table = CalculateRecursiveLevel4(0);
+            if(~(lvl4_table[entry]) & 1) { return;}
+            lvl4_table[entry] |= (1 << 8);
+        }
+
         void InvalidatePage(uint64_t address) {
             asm volatile("invlpg (%0)" : : "b"(address) : "memory");
             //SwitchPageTables(); // lol
             (void)address;
         }
 
+        // Get the physical address of a mapping. Returns NULL if failed.
+        uint64_t GetPhysical(uint64_t virt) {
+            int lvl4 = (virt >> 39) & 0b111111111;
+            int lvl3 = (virt >> 30) & 0b111111111;
+            int lvl2 = (virt >> 21) & 0b111111111;
+            int lvl1 = (virt >> 12) & 0b111111111;
+            // Check if the level 3 table exists
+            uint64_t* lvl4_table = CalculateRecursiveLevel4(0);
+            if(~(lvl4_table[lvl4]) & 1) { return (uint64_t)NULL; }
+            uint64_t* lvl3_table = CalculateRecursiveLevel3(lvl4);
+            // Check if the level 2 table exists
+            if(~(lvl3_table[lvl3]) & 1) { return (uint64_t)NULL; }
+            uint64_t* lvl2_table = CalculateRecursiveLevel2(lvl3, lvl4);
+            // Check if the level 1 table exists
+            if(~(lvl2_table[lvl2]) & 1) { return (uint64_t)NULL; }
+            uint64_t* lvl1_table = CalculateRecursiveLevel1(lvl2, lvl3, lvl4);
+            // Check the entry
+            uint64_t entry = lvl1_table[lvl1];
+            if(~(entry) & 1) { return (uint64_t)NULL; }
+            return entry & 0xFFFFFFFFFF000;
+        } 
 
         void Init() {
             // We are still using stivale2's memory mapping, so we can just write to the pages allocated by the physical memory allocator.
@@ -63,6 +88,11 @@ namespace Kernel {
             // Change CR3 register to page_table
             // This should auto-flush the TLB
             asm volatile("mov %0, %%cr3" : :"r"(page_table));
+        }
+
+        // Set the page table to a specific table.
+        void SwitchPageTables(uint64_t table) {
+            asm volatile("mov %0, %%cr3" : : "r"(table));
         }
 
         void* AllocatePages(size_t count) {
@@ -112,7 +142,20 @@ namespace Kernel {
 
 
 
-        // Maps addresses.
+        // Create a new page table.
+        uint64_t CreateNewPageTable() {
+            // Get entry for the kernel mappings
+            uint64_t kernel_mappings = CalculateRecursiveLevel4()[511];
+            uint64_t* new_table_virtual = (uint64_t*)AllocatePages(1);
+            uint64_t new_table_physical = (uint64_t)GetPhysical((uint64_t)new_table_virtual);
+
+            // Copy kernel mapping over
+            new_table_virtual[511] = kernel_mappings;
+            return new_table_physical;
+        }
+
+
+        // Maps addresses in the current page table using recursive mapping.
         void MapPage(unsigned long phys, unsigned long virt, unsigned long options) {
             int lvl4 = (virt >> 39) & 0b111111111;
             int lvl3 = (virt >> 30) & 0b111111111;
@@ -123,24 +166,29 @@ namespace Kernel {
             if(~(lvl4_table[lvl4]) & 1) {
                 lvl4_table[lvl4] = (uint64_t)__physmem_allocate_page() | 0b11;
                 InvalidatePage((uint64_t)CalculateRecursiveLevel3(lvl4));
+                memset((void*)((uint64_t)CalculateRecursiveLevel3(lvl4)), 0x00, 4096);
             }
             uint64_t* lvl3_table = CalculateRecursiveLevel3(lvl4);
             // Check if the level 2 table exists
             if(~(lvl3_table[lvl3]) & 1) {
                 lvl3_table[lvl3] = (uint64_t)__physmem_allocate_page() | 0b11;
                 InvalidatePage((uint64_t)CalculateRecursiveLevel2(lvl3, lvl4));
+                memset((void*)((uint64_t)CalculateRecursiveLevel2(lvl3, lvl4)), 0x00, 4096);
             }
             uint64_t* lvl2_table = CalculateRecursiveLevel2(lvl3, lvl4);
             // Check if the level 1 table exists
             if(~(lvl2_table[lvl2]) & 1) {
                 lvl2_table[lvl2] = (uint64_t)__physmem_allocate_page() | 0b11;
                 InvalidatePage((uint64_t)CalculateRecursiveLevel1(lvl2, lvl3, lvl4));
+                memset((void*)((uint64_t)CalculateRecursiveLevel1(lvl2, lvl3, lvl4)), 0x00, 4096);
             }
             uint64_t* lvl1_table = CalculateRecursiveLevel1(lvl2, lvl3, lvl4);
             // Set the entry
             lvl1_table[lvl1] = (phys & 0xFFFFFFFFFF000) | options;
             InvalidatePage((virt & 0xFFFFFFFFFF000));
         }
+        
+
 
 
         // Modified version of MapPage that uses stiavle2's identity mapping to create new pages tables.

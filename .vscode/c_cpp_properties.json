@@ -1,0 +1,40 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [],
+            "compilerPath": "/home/alexander/opt/cross/bin/x86_64-elf-g++",
+            "cStandard": "c17",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerArgs": [
+                "-ffreestanding",
+                "-O2",
+                "-Wall",
+                "-Wextra",
+                "-pedantic",
+                "-fno-exceptions",
+                "-fno-rtti",
+                "-mno-mmx",
+                "-mno-sse",
+                "-mno-sse2",
+                "-mno-sse3",
+                "-mno-3dnow",
+                "-mgeneral-regs-only",
+                "-mno-red-zone",
+                "-fno-stack-protector",
+                "-fPIC",
+                "-g",
+                "-std=c++2a",
+                "-Iarch/$(ARCH)/inc",
+                "-Iagnostic/inc",
+                "-include \"mem.h\"",
+                "-include \"panic.h\""
+            ]
+        }
+    ],
+    "version": 4
+}

@@ -7,14 +7,16 @@
 #include <mem/virtmem.h>
 #include <debug/serial.h>
 #include <kmain.h>
-#include <interrupts/interrupts.h>
+#include <interrupts.h>
+
+
 
 typedef void (*ctor_constructor)();
 extern "C" ctor_constructor start_ctors;
 extern "C" ctor_constructor end_ctors;
 
 // The following will be our kernel's entry point.
-extern "C" void __attribute__((optimize("O0"))) _start(struct stivale2_struct *stivale2_struct) {
+extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     // We are in a very limited enviroment right now, including the fact that the kernel heap doesnt work yet
     // (on purpose, to prevent undef. behaviour incase we accidentally call it)
 
@@ -99,20 +101,18 @@ extern "C" void __attribute__((optimize("O0"))) _start(struct stivale2_struct *s
     // We can now switch to the new page table
     Kernel::VirtualMemory::SwitchPageTables();
 
+
     // We are in a much safer place now; dereferencing null pointers will for example now crash, before it would have been identity mapped to physical memory.
     // We can also setup simple debug output, and use the panic function (errors previously would have simply crashed the system)
 
     // Setup serial debug output
     __init_serial();
 
-
     // Initialize TSS
     load_tss();
-    
+
     // Initalize Interrupts
     Kernel::Interrupts::InitInterrupts();
-
-    asm volatile("int $34");
 
     // Basic init has occured, we can call the main now
     Kernel::KernelMain();
