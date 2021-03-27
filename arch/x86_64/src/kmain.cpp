@@ -1,10 +1,9 @@
 #include <mem.h>
 #include <kmain.h>
+#include <panic.h>
 
 namespace Kernel {
     void KernelMain() {
-
-
-        for(;;);
+        Debug::Panic("test");
     }
 }

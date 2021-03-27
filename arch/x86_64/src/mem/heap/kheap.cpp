@@ -1,6 +1,10 @@
 #include <mem/heap/kheap.h>
 #include <stdint.h>
 
+// This heap implementation is slow and bad but it works for now
+// TODO: implemnt heap expansion, prefarably in the megabyte range
+
+
 // Define space for the initial heap
 // Doesnt need to be the biggest thing ever yet
 // TODO: Define the minimum size for this that would boot the kernel into a state that allows expansion of the heap

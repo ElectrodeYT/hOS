@@ -1,19 +1,24 @@
 #ifndef VIRTMEM_H
 #define VIRTMEM_H
 
-// Initialize virtual memory.
-// Also creates the page tables, and changes to them.
-void __init_virtual_memory();
+#include <stddef.h>
 
-void __virtmem_switch_page_tables();
+namespace Kernel {
+    namespace VirtualMemory {
+        // Initialize virtual memory.
+        // Also creates the page tables, and changes to them.
+        void Init();
 
-void* __virtmem_allocate_pages(int count);
-void __virtmem_free_pages(void* adr, int count);
+        void SwitchPageTables();
 
-// Maps addresses.
-void __virtmem_map(unsigned long phys, unsigned long virt);
-// Modified version of __virtmem_map that uses stiavle2's identity mapping to create new pages tables.
-void __virtmem_early_map(unsigned long phys, unsigned long virt);
+        void* AllocatePages(size_t count = 1);
+        void FreePages(void* adr, int count);
 
+        // Maps addresses.
+        void MapPage(unsigned long phys, unsigned long virt, unsigned long options = 0b11);
+        // Modified version of __virtmem_map that uses stiavle2's identity mapping to create new pages tables.
+        void MapPageEarly(unsigned long phys, unsigned long virt);
+    }
+}
 
 #endif

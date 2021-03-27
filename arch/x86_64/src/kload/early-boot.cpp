@@ -2,19 +2,13 @@
 #include <early-boot.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <mem/virtmem.h>
+#include <mem.h>
 
-// We need to tell the stivale bootloader where we want our stack to be.
-// We are going to allocate our stack as an uninitialised array in .bss.
+// Kernel boot stack
 static uint8_t stack[4096];
 
-// stivale2 uses a linked list of tags for both communicating TO the
-// bootloader, or receiving info FROM it. More information about these tags
-// is found in the stivale2 specification.
-
-// As an example header tag, we're gonna define a framebuffer header tag.
-// This tag tells the bootloader that we want a graphical framebuffer instead
-// of a CGA-compatible text mode. Omitting this tag will make the bootloader
-// default to text mode.
+// Tell stivale2 to make a framebuffer (definetly not copied)
 struct stivale2_header_tag_framebuffer framebuffer_hdr_tag = {
     // All tags need to begin with an identifier and a pointer to the next tag.
     .tag = {
@@ -30,12 +24,8 @@ struct stivale2_header_tag_framebuffer framebuffer_hdr_tag = {
     .framebuffer_bpp    = 0
 };
 
-// The stivale2 specification says we need to define a "header structure".
-// This structure needs to reside in the .stivale2hdr ELF section in order
-// for the bootloader to find it. We use this __attribute__ directive to
-// tell the compiler to put the following structure in said section.
-__attribute__((section(".stivale2hdr"), used))
-struct stivale2_header stivale_hdr = {
+// Stivale2 header
+struct stivale2_header __attribute__((section(".stivale2hdr"), used)) stivale_hdr = {
     // The entry_point member is used to specify an alternative entry
     // point that the bootloader should jump to instead of the executable's
     // ELF entry point. We do not care about that so we leave it zeroed.
@@ -51,8 +41,7 @@ struct stivale2_header stivale_hdr = {
     .tags = (uintptr_t)&framebuffer_hdr_tag
 };
 
-// We will now write a helper function which will allow us to scan for tags
-// that we want FROM the bootloader (structure tags).
+// most-certinaly-not-stolen function i definetly should not ever need to not rewrite
 void* stivale2_get_tag(struct stivale2_struct *stivale2_struct, uint64_t id) {
     struct stivale2_tag* current_tag = (stivale2_tag*)stivale2_struct->tags;
     for (;;) {
@@ -98,6 +87,12 @@ void add_gdt_descriptor(uint32_t base, uint32_t limit, uint8_t access, uint8_t f
     gdt_data[gdt_pointer++] = (base >> 24) & 0xFF;
 }
 
+// Flush any changes to the gdt
+void flush_gdt()  {
+   asm volatile("lgdt %0" : : "m" (gdt_pointer_desc));
+   flush_segments();
+}
+
 // Load the gdt
 void load_gdt() {
     add_gdt_descriptor(0, 0, 0, 0);
@@ -106,9 +101,94 @@ void load_gdt() {
     add_gdt_descriptor(0, UINT32_MAX, 0b11111010, 0b10100000); // User code
     add_gdt_descriptor(0, UINT32_MAX, 0b11110010, 0b11000000); // User data
 
-    gdt_pointer_desc.size = gdt_pointer - 1;
+    gdt_pointer_desc.size = sizeof(gdt_data);
     gdt_pointer_desc.base = (uint64_t)gdt_data;
-    asm volatile("lgdt %0" : : "m" (gdt_pointer_desc));
+    flush_gdt();
+}
 
-    flush_segments();
+
+// TSS stacks
+uint8_t* tss_rsp0;
+uint8_t* tss_rsp1;
+uint8_t* tss_rsp2;
+
+static unsigned long tss_stack_size = 4; // In pages
+
+struct TSS {
+    uint32_t reserved0;
+    uint64_t rsp0;
+    uint64_t rsp1;
+    uint64_t rsp2;
+    uint64_t reserved1;
+    uint64_t ist1;
+    uint64_t ist2;
+    uint64_t ist3;
+    uint64_t ist4;
+    uint64_t ist5;
+    uint64_t ist6;
+    uint64_t ist7;
+    uint64_t reserved2;
+    uint16_t reserved3;
+    uint16_t iopb_offset;
+}__attribute__((packed));
+
+__attribute__((aligned(4096)))
+static TSS tss;
+
+/*
+uint64_t bits(uint64_t shiftup, uint64_t shiftdown, uint64_t mask, uint64_t val) {
+    return ((val >> (shiftdown - mask)) & ((1 << mask) - 1)) << shiftup;
+} 
+*/
+// Load the TSS
+// This should be done after virtual memory init
+void load_tss() {
+    // Allocate the stacks
+    tss_rsp0 = (uint8_t*)Kernel::VirtualMemory::AllocatePages(tss_stack_size);
+    tss_rsp1 = (uint8_t*)Kernel::VirtualMemory::AllocatePages(tss_stack_size);
+    tss_rsp2 = (uint8_t*)Kernel::VirtualMemory::AllocatePages(tss_stack_size);
+    // Zero out the tss
+    memset((void*)&tss, 0x00, sizeof(tss));
+    
+    // Set the interrupt stacks
+    tss.rsp0 = (uint64_t)tss_rsp0 + (tss_stack_size * 4096);
+    tss.rsp1 = (uint64_t)tss_rsp1 + (tss_stack_size * 4096);
+    tss.rsp2 = (uint64_t)tss_rsp2 + (tss_stack_size * 4096);
+    
+    // Set iopb to sizeof(tss)
+    tss.iopb_offset = 104;
+
+    // We now have to add the TSS descriptor to the GDT.
+    // It is so ridicously complicated that we do this manually here.
+    // Save current gdt pointer
+    int curr_gdt_pointer = gdt_pointer;
+    // Advance it twice
+    gdt_pointer += 16;
+    uint64_t tss_addr = (uint64_t)&tss;
+
+    // Marvel at this absolute stupidity
+    gdt_data[curr_gdt_pointer++] = sizeof(TSS) & 0xFF;
+    gdt_data[curr_gdt_pointer++] = (sizeof(TSS) >> 8) & 0xFF;
+    gdt_data[curr_gdt_pointer++] = (tss_addr >> 0) & 0xFF;
+    gdt_data[curr_gdt_pointer++] = (tss_addr >> 8) & 0xFF;
+    gdt_data[curr_gdt_pointer++] = (tss_addr >> 16) & 0xFF;
+    gdt_data[curr_gdt_pointer++] = 0x89;
+    gdt_data[curr_gdt_pointer++] = 0x80;
+    gdt_data[curr_gdt_pointer++] = (tss_addr >> 24) & 0xFF;
+    gdt_data[curr_gdt_pointer++] = (tss_addr >> 32) & 0xFF;
+    gdt_data[curr_gdt_pointer++] = (tss_addr >> 40) & 0xFF;
+    gdt_data[curr_gdt_pointer++] = (tss_addr >> 48) & 0xFF;
+    gdt_data[curr_gdt_pointer++] = (tss_addr >> 56) & 0xFF;
+    gdt_data[curr_gdt_pointer++] = 0;
+    gdt_data[curr_gdt_pointer++] = 0;
+    gdt_data[curr_gdt_pointer++] = 0;
+    gdt_data[curr_gdt_pointer++] = 0;
+ /*
+
+    uint64_t* gdt_longs = (uint64_t*)gdt_data;
+    size_t gdt_long_pointer = curr_gdt_pointer / 8;
+    gdt_longs[gdt_long_pointer] = bits(16, 24, 24, tss_addr) | bits(56, 32, 8, tss_addr) | (103 & 0xff) | (0b1001UL << 40) | (1UL << 47);
+    gdt_longs[gdt_long_pointer + 1] = tss_addr >> 32;
+    */flush_gdt();
+    asm volatile("ltr %w0" : : "qm"((gdt_pointer - 16)));
 }

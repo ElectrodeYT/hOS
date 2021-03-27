@@ -7,6 +7,7 @@
 #include <mem/virtmem.h>
 #include <debug/serial.h>
 #include <kmain.h>
+#include <interrupts/interrupts.h>
 
 typedef void (*ctor_constructor)();
 extern "C" ctor_constructor start_ctors;
@@ -74,7 +75,7 @@ extern "C" void __attribute__((optimize("O0"))) _start(struct stivale2_struct *s
     __init_physical_allocator(physical_mem_ll);
 
     // Initialize virtual memory
-    __init_virtual_memory();
+    Kernel::VirtualMemory::Init();
 
     // Call the global constructors
     for (ctor_constructor* ctor = &start_ctors; ctor < &end_ctors; ctor++) {
@@ -91,18 +92,27 @@ extern "C" void __attribute__((optimize("O0"))) _start(struct stivale2_struct *s
     if((kernel_mapping->base + kernel_mapping->length) & 0xFFF) { kernel_phys_end += 4 * 1024; }
 
     for(uint64_t current_map = kernel_phys_begin; current_map < kernel_phys_end; current_map += 4 * 1024) {
-        __virtmem_early_map(current_map, kernel_virt_begin);
+        Kernel::VirtualMemory::MapPageEarly(current_map, kernel_virt_begin);
         kernel_virt_begin += 4 * 1024;
     }
 
     // We can now switch to the new page table
-    __virtmem_switch_page_tables();
+    Kernel::VirtualMemory::SwitchPageTables();
 
     // We are in a much safer place now; dereferencing null pointers will for example now crash, before it would have been identity mapped to physical memory.
-    // We can also setup simple debug output, and initialize the panic function (errors previously would have simply crashed the system)
+    // We can also setup simple debug output, and use the panic function (errors previously would have simply crashed the system)
 
     // Setup serial debug output
     __init_serial();
+
+
+    // Initialize TSS
+    load_tss();
+    
+    // Initalize Interrupts
+    Kernel::Interrupts::InitInterrupts();
+
+    asm volatile("int $34");
 
     // Basic init has occured, we can call the main now
     Kernel::KernelMain();
