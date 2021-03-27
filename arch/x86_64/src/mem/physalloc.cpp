@@ -40,7 +40,7 @@ void* __physmem_allocate_page(int count) {
                 // Check if there are enough consecutive pages available
                 bool enough = true;
                 int page_failed = 0;
-                for(size_t check_page = page; check_page < (page + count); check_page++) {
+                for(size_t check_page = page + 1; check_page < (page + count); check_page++) {
                     // Really fancy shit
                     if((curr->bitmap[check_page / 8] >> (check_page % 8)) & 1) { enough = false; page_failed = check_page; break; }
                 }

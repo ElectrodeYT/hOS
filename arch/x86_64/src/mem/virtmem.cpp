@@ -88,7 +88,7 @@ namespace Kernel {
                         continue;
                     }
                     // Enough pages are available
-                    for(size_t page_set = page; page_set < (page + count); page_set++) {
+                    for(size_t page_set = page + 1; page_set < (page + count); page_set++) {
                         kernel_page_bitmap[page_set / 8] |= 1 << (page_set % 8);
                     }
                     // Map some pages into there
