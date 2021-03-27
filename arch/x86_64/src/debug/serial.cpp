@@ -36,18 +36,17 @@ namespace Kernel {
             int num = i;
             int pointer = 0; 
 
-            for(int x = 0; x < 32; x++) { buf[x] = '\0'; }
-
+            memset((void*)buf, 0x00, sizeof(buf));
             do {
-            int modulo = num % base;
-            if(modulo < 0) { modulo = -modulo; }
-            buf[pointer++] = text[modulo];
-            num /= base;
+                int modulo = num % base;
+                if(modulo < 0) { modulo = -modulo; }
+                buf[pointer++] = text[modulo];
+                num /= base;
             } while(num != 0);
 
             // Print it backwards
             if(base == 10 && i < 0) { SerialPutChar('-'); }
             while(pointer >= 0) { SerialPutChar(buf[pointer--]); } 
-            } 
+        } 
     }
 }
