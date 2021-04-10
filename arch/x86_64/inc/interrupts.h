@@ -1,5 +1,5 @@
 #ifndef INTERRUPTS_H
-#define INTERRUPTS_h
+#define INTERRUPTS_H
 
 #include <stdint.h>
 namespace Kernel {

@@ -26,4 +26,9 @@ void operator delete[](void* p, unsigned long idk);
 
 void memset(void* dst, uint8_t val, unsigned long size);
 
+void memcopy(void* src, void* dst, unsigned long size);
+
+void* malloc(unsigned long size);
+void free(void* p);
+
 #endif

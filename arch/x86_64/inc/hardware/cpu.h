@@ -12,7 +12,6 @@ namespace Kernel {
             uint64_t rsp;
             uint64_t rsi;
             uint64_t rdi;
-            uint64_t rax;
             uint64_t r8;
             uint64_t r9;
             uint64_t r10;
@@ -21,6 +20,7 @@ namespace Kernel {
             uint64_t r13;
             uint64_t r14;
             uint64_t r15;
+            uint64_t rip;
         };
     }
 }

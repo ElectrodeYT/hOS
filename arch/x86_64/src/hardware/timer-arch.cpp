@@ -3,6 +3,8 @@
 // For setting up the timer interrupt
 #include <interrupts.h>
 #include <hardware/instructions.h>
+// For checking if the context needs to be switched
+#include <processes/scheduler.h>
 
 namespace Kernel {
     namespace Hardware {
@@ -13,7 +15,8 @@ namespace Kernel {
             void ArchTimerInterrupt(Interrupts::ISRRegisters* registers) {
                 // Call agnostic timer interrupt
                 AgnosticTimerInterrupt();
-                (void)registers;
+                // Call the scheduler to check if there is the need to schedule a new process
+                Processes::Scheduler::the().Schedule(registers);
             }
 
             void ArchSetupTimer() {

@@ -7,7 +7,7 @@
 namespace Kernel {
     namespace Hardware {
         namespace Timer {
-            typedef void (*timer_callback_t)(); 
+            using timer_callback_t = void(*)(void*);
 
             // Platform independent kernel functions
             int GetCurrentTimeStamp();
@@ -20,7 +20,7 @@ namespace Kernel {
             void InitTimer();
 
             // Attaches a timer based callback
-            void AttachCallback(timer_callback_t callback);
+            void AttachCallback(timer_callback_t callback, void* arg);
 
             // Platform dependent kernel functions
             void ArchSetupTimer();

@@ -30,10 +30,24 @@ void operator delete[](void* p, unsigned long idk) {
     kheap_free(p);
 }
 
-void memset(void* dst, uint8_t val, unsigned long size) {
-    for(unsigned long i = 0; i < size; i++) {
-        *(uint8_t*)((uint64_t)dst + i) = val;
-    }
+void* malloc(unsigned long size) {
+    return kheap_alloc(size);
+}
+
+void free(void* p) {
+    kheap_free(p);
 }
 
 #endif
+
+void memset(void* dst, uint8_t val, unsigned long size) {
+    for(unsigned long i = 0; i < size; i++) {
+        ((uint8_t*)dst)[i] = val;
+    }
+}
+
+void memcopy(void* src, void* dst, unsigned long size) {
+    for(unsigned long i = 0; i < size; i++) {
+        ((uint8_t*)dst)[i] = ((uint8_t*)src)[i];
+    }
+}

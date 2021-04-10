@@ -2,7 +2,7 @@
 #include <early-boot.h>
 #include <stdint.h>
 #include <stddef.h>
-#include <mem/virtmem.h>
+#include <mem/VM/virtmem.h>
 #include <mem.h>
 
 // Kernel boot stack
@@ -144,9 +144,9 @@ uint64_t bits(uint64_t shiftup, uint64_t shiftdown, uint64_t mask, uint64_t val)
 // This should be done after virtual memory init
 void load_tss() {
     // Allocate the stacks
-    tss_rsp0 = (uint8_t*)Kernel::VirtualMemory::the().AllocatePages(tss_stack_size);
-    tss_rsp1 = (uint8_t*)Kernel::VirtualMemory::the().AllocatePages(tss_stack_size);
-    tss_rsp2 = (uint8_t*)Kernel::VirtualMemory::the().AllocatePages(tss_stack_size);
+    tss_rsp0 = (uint8_t*)Kernel::VM::Manager::the().AllocatePages(tss_stack_size);
+    tss_rsp1 = (uint8_t*)Kernel::VM::Manager::the().AllocatePages(tss_stack_size);
+    tss_rsp2 = (uint8_t*)Kernel::VM::Manager::the().AllocatePages(tss_stack_size);
     // Zero out the tss
     memset((void*)&tss, 0x00, sizeof(tss));
     

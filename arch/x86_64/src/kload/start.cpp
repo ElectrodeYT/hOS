@@ -3,8 +3,8 @@
 #include <stivale2.h>
 #include <early-boot.h>
 #include <mem.h>
-#include <mem/physalloc.h>
-#include <mem/virtmem.h>
+#include <mem/PM/physalloc.h>
+#include <mem/VM/virtmem.h>
 #include <debug/serial.h>
 #include <kmain.h>
 #include <interrupts.h>
@@ -25,6 +25,11 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     // We initialize the kernel internal heap as well, it is needed for initializing 
     __init_heap();
 
+    // Call the global constructors
+    for (ctor_constructor* ctor = &start_ctors; ctor < &end_ctors; ctor++) {
+        (*ctor)();
+    }
+
     // Get stivale memory map tag
     stivale2_struct_tag_memmap* memmap_tag = (stivale2_struct_tag_memmap*)stivale2_get_tag(stivale2_struct, STIVALE2_STRUCT_TAG_MEMMAP_ID);
 
@@ -33,12 +38,12 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
 
     // Check that the memory map is availabe
     if(memmap_tag->entries == 0) { for(;;); } // No output is setup yet, just hang
-    physmem_ll* physical_mem_ll = new physmem_ll;
+    Kernel::PM::physmem_ll* physical_mem_ll = new Kernel::PM::physmem_ll;
     physical_mem_ll->base = 0;
     physical_mem_ll->next = 0;
     physical_mem_ll->size = 0;
     physical_mem_ll->type = 0;
-    physmem_ll* curr_phys_mem_ll = physical_mem_ll;
+    Kernel::PM::physmem_ll* curr_phys_mem_ll = physical_mem_ll;
     for(unsigned int i = 0; i < memmap_tag->entries; i++) {
         uint8_t entry_type = 255;
         // Convert stivale2 type to kernel internal type
@@ -64,7 +69,7 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
         
         // If this isnt the last one, allocate next one and change to it
         if(i != (memmap_tag->entries - 1)) {
-            curr_phys_mem_ll->next = new physmem_ll;
+            curr_phys_mem_ll->next = new Kernel::PM::physmem_ll;
             curr_phys_mem_ll = curr_phys_mem_ll->next;
         }
 
@@ -74,16 +79,11 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
         }
     }
 
-    // Call the global constructors
-    for (ctor_constructor* ctor = &start_ctors; ctor < &end_ctors; ctor++) {
-        (*ctor)();
-    }
-
     // Now initialize the physical memory allocator
-    __init_physical_allocator(physical_mem_ll);
+    Kernel::PM::Manager::the().Init(physical_mem_ll);
 
     // Initialize virtual memory
-    Kernel::VirtualMemory::the().Init();
+    Kernel::VM::Manager::the().Init();
 
     // Map kernel
     uint64_t kernel_phys_begin = (kernel_mapping->base & 0xFFFFFFFFFF000);
@@ -95,12 +95,12 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     if((kernel_mapping->base + kernel_mapping->length) & 0xFFF) { kernel_phys_end += 4 * 1024; }
 
     for(uint64_t current_map = kernel_phys_begin; current_map < kernel_phys_end; current_map += 4 * 1024) {
-        Kernel::VirtualMemory::the().MapPageEarly(current_map, kernel_virt_begin);
+        Kernel::VM::Manager::the().MapPageEarly(current_map, kernel_virt_begin);
         kernel_virt_begin += 4 * 1024;
     }
 
     // We can now switch to the new page table
-    Kernel::VirtualMemory::the().SwitchPageTables();
+    Kernel::VM::Manager::the().SwitchPageTables();
 
 
     // We are in a much safer place now; dereferencing null pointers will for example now crash, before it would have been identity mapped to physical memory.

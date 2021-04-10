@@ -2,7 +2,8 @@
 #include <kmain.h>
 #include <panic.h>
 #include <timer.h>
-#include <mem/virtmem.h>
+#include <mem/VM/virtmem.h>
+#include <processes/scheduler.h>
 
 namespace Kernel {
     void KernelMain() {
@@ -14,11 +15,10 @@ namespace Kernel {
         asm volatile("sti");
         // TODO: Read modules passed into the kernel by stivale2
         // TODO: VFS
-        // TODO: Scheduler
+        
+        // Initialize scheduler
+        Processes::Scheduler::the().Init();
 
-        // Test new page table getting
-        uint64_t new_page = VirtualMemory::the().CreateNewPageTable();
-        VirtualMemory::the().SwitchPageTables(new_page);
         for(;;);
     }
 }
