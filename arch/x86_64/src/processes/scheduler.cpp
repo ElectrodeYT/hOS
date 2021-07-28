@@ -5,6 +5,7 @@
 #include <timer.h>
 #include <debug/serial.h>
 #include <panic.h>
+#include <CPP/string.h>
 
 namespace Kernel {
     namespace Processes {
@@ -12,10 +13,17 @@ namespace Kernel {
             // TODO
         }
 
-        int Scheduler::CreateProcess(uint8_t* data, size_t length, uint64_t initial_instruction_pointer) {
+        int Scheduler::CreateProcess(uint8_t* data, size_t length, uint64_t initial_instruction_pointer, char* name, bool isKernel) {
             // Create process
             Process* new_proc = new Process;
             new_proc->page_table = VM::Manager::the().CreateNewPageTable();
+            // Create the string in it, and copy the given name over
+            size_t name_len = strlen(name);
+            new_proc->name = new char[name_len + 1];
+            memcopy(name, new_proc->name, name_len + 1);
+
+            Debug::SerialPrintf("Creating new process %s\r\n", new_proc->name);
+
             // We want to save the current page table, as we need to switch to it later
             uint64_t curr_page_table = VM::Manager::the().CurrentPageTable();
             // Switch into new page table
@@ -49,11 +57,47 @@ namespace Kernel {
             Thread* main_thread = new Thread;
             main_thread->tid = 0;
             main_thread->regs.rip = initial_instruction_pointer;
+            main_thread->regs.rflags = 0x202;
+            main_thread->regs.cs = 0x18 | 0b11;
+            main_thread->regs.ss = 0x20 | 0b11;
 
             // Attach thread to new process
             new_proc->threads.push_back(main_thread);
 
             // Add process
+            processes.push_back(new_proc);
+            return 0;
+        }
+
+        int Scheduler::CreateService(uint64_t initial_instruction_pointer, char* name) {
+            // Create new process
+            Process* new_proc = new Process;
+            new_proc->page_table = VM::Manager::the().CurrentPageTable();
+            new_proc->isKernel = true;
+            
+            // Create the string in it, and copy the given name over
+            size_t name_len = strlen(name);
+            new_proc->name = new char[name_len + 1];
+            memcopy(name, new_proc->name, name_len + 1);
+
+            Debug::SerialPrintf("Creating new kernel service %s\r\n", new_proc->name);
+
+            // Initialize main thread
+            Thread* main_thread = new Thread;
+            main_thread->tid = 0;
+            main_thread->regs.rip = initial_instruction_pointer;
+            main_thread->regs.rflags = 0x202;
+            main_thread->regs.cs = 0x08;
+            main_thread->regs.ss = 0x10;
+
+            // Initialize new stack
+            VM::Manager::VMObject* stack = new VM::Manager::VMObject(true, false);
+            stack->base = (uint64_t)VM::Manager::the().AllocatePages(16);
+            stack->size = 4096 * 16;
+            new_proc->mappings.push_back(stack);
+
+            main_thread->regs.rsp = stack->base + stack->size;
+            new_proc->threads.push_back(main_thread);
             processes.push_back(new_proc);
             return 0;
         }
@@ -72,6 +116,7 @@ namespace Kernel {
             curr_t->regs.rip = regs->rip;
             curr_t->regs.rsi = regs->rsi;
             curr_t->regs.rsp = regs->rsp;
+            curr_t->regs.r8 = regs->r8;
             curr_t->regs.r9 = regs->r9;
             curr_t->regs.r10 = regs->r10;
             curr_t->regs.r11 = regs->r11;
@@ -79,12 +124,17 @@ namespace Kernel {
             curr_t->regs.r13 = regs->r13;
             curr_t->regs.r14 = regs->r14;
             curr_t->regs.r15 = regs->r15;
+            curr_t->regs.rflags = regs->rflags;
+            curr_t->regs.cs = regs->cs;
+            curr_t->regs.ss = regs->ss;
         }
 
         void Scheduler::Schedule(Interrupts::ISRRegisters* regs) {
             // TODO: Support multiple threads
             // Increment pid
             curr_proc++;
+            // Make sure PID 0 is scheduled first
+            if(!first_schedule_complete) { curr_proc = 0; first_schedule_complete = true; }
             // Return if no process exists
             if(processes.size() == 0) { curr_proc = 0; return; }
             
@@ -104,6 +154,7 @@ namespace Kernel {
             regs->rip = thread->regs.rip;
             regs->rsi = thread->regs.rsi;
             regs->rsp = thread->regs.rsp;
+            regs->r8 = thread->regs.r8;
             regs->r9 = thread->regs.r9;
             regs->r10 = thread->regs.r10;
             regs->r11 = thread->regs.r11;
@@ -111,15 +162,36 @@ namespace Kernel {
             regs->r13 = thread->regs.r13;
             regs->r14 = thread->regs.r14;
             regs->r15 = thread->regs.r15;
+            regs->rflags = thread->regs.rflags;
+            regs->cs = thread->regs.cs;
+            regs->ss = thread->regs.ss;
 
             // Change to process page table
             VM::Manager::the().SwitchPageTables(proc->page_table);
+            timer_curr = 0;
+        }
+
+        void Scheduler::FirstSchedule() {
+            // This doesnt actually schedule anything, but prepares internal values for scheduling to begin
+            // Scheduling is always done from the timer interrupt
+            ASSERT(processes.size(), "Attempted to begin scheduling without any processes");
+            ASSERT(processes.at(0)->threads.size(), "PID 0 has no threads");
+            curr_proc = 0;
+            Debug::SerialPrintf("First schedule init complete, processes count %i\r\n", processes.size());
+            first_schedule_init_done = true;
         }
 
         void Scheduler::TimerCallback(Interrupts::ISRRegisters* regs) {
+            //Debug::SerialPrintf("Scheduler timer callback\r\n");
+            // Bail if the schedule has not yet been inited, or if we were in kernel mode
+            if(!first_schedule_init_done) { return; }
+            
             timer_curr++;
             if(timer_curr >= timer_switch) {
-                SaveContext(regs);
+                if(first_schedule_complete) {
+                    SaveContext(regs);
+                }
+                //Debug::SerialPrintf("Calling scheduler\r\n");
                 Schedule(regs);
             }
         }

@@ -21,7 +21,7 @@ create-image $(image): $(kernel)
 	@limine-install $(image)
 
 qemu: $(image)
-	@qemu-system-x86_64 -drive format=raw,file=$(image) -m 256
+	@qemu-system-x86_64 -drive format=raw,file=$(image) -m 256 -d int -no-reboot -no-shutdown
 
 qemu-debug: $(image)
 	@gdb -x boot/gdb.gdb -tui

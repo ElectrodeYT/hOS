@@ -8,6 +8,7 @@
 #include <debug/serial.h>
 #include <kmain.h>
 #include <interrupts.h>
+#include <debug/serial.h>
 
 
 
@@ -75,6 +76,10 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
 
         // If this is the kernel mapping, save it
         if(memmap_tag->memmap[i].type == STIVALE2_MMAP_KERNEL_AND_MODULES) {
+            if(kernel_mapping != NULL) {
+                Kernel::Debug::SerialPrint("early boot error: multiple kernel regions");
+                for(;;);
+            }
             kernel_mapping = &(memmap_tag->memmap[i]);
         }
     }

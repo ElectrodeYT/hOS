@@ -16,7 +16,7 @@ namespace Kernel {
                 // Call agnostic timer interrupt
                 AgnosticTimerInterrupt();
                 // Call the scheduler to check if there is the need to schedule a new process
-                Processes::Scheduler::the().Schedule(registers);
+                Processes::Scheduler::the().TimerCallback(registers);
             }
 
             void ArchSetupTimer() {

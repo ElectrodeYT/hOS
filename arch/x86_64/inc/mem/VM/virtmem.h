@@ -3,6 +3,11 @@
 
 #include <stddef.h>
 #include <CPP/vector.h>
+#include <CPP/mutex.h>
+
+constexpr uint64_t round_to_page_up(uint64_t addr) {
+    return ((addr + 4096 - 1) & ~(addr - 1));
+}
 
 namespace Kernel {
     namespace VM {
@@ -74,6 +79,9 @@ namespace Kernel {
 
             // Vector of all allocated memory
             Vector<VMObject*> mem;
+
+            // Mutex
+            mutex_t mutex;
         };
     }
 }

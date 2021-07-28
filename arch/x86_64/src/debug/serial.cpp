@@ -1,6 +1,9 @@
 #include <mem.h>
+#include <panic.h>
 #include <hardware/instructions.h>
 #include <debug/serial.h>
+#include <CPP/string.h>
+#include <stdarg.h>
 
 void __init_serial() {
     // i dont really understand this
@@ -30,23 +33,44 @@ namespace Kernel {
                 outb(0x3F8, *c++);
             }
         }
+        
         void SerialPrintInt(long i, int base) {
-            static char text[17] = "0123456789ABCDEF";
             char buf[32];
-            int num = i;
-            int pointer = 0; 
+            itoa(i, buf, base);
+            SerialPrint(buf);
+        }
 
-            memset((void*)buf, 0x00, sizeof(buf));
-            do {
-                int modulo = num % base;
-                if(modulo < 0) { modulo = -modulo; }
-                buf[pointer++] = text[modulo];
-                num /= base;
-            } while(num != 0);
+        void SerialPrintAddress(uint64_t i) {
+            SerialPrint("0x");
+            for(int nibble = 15; nibble >= 0; nibble--) {
+                uint8_t val = (i & ((uint64_t)0xF << (nibble * 4))) >> (nibble * 4);
+                SerialPutChar("0123456789ABCDEF"[val]);
+            }
+        }
 
-            // Print it backwards
-            if(base == 10 && i < 0) { SerialPutChar('-'); }
-            while(pointer >= 0) { SerialPutChar(buf[pointer--]); } 
-        } 
+        void SerialPrintf(char* str, ...) {
+            va_list args;
+            va_start(args, str);
+            while(*str) {
+                if(*str == '%') {
+                    switch(*++str) {
+                        case 0: ASSERT(false, "SerialPrintf: null terminator after %");
+                        case '%': SerialPutChar('%'); break;
+                        case 'i': 
+                        case 'd': SerialPrintInt(va_arg(args, int), 10); break;
+                        case 'l': SerialPrintInt(va_arg(args, long), 10); break;
+                        case 'X':
+                        case 'x': SerialPrintAddress(va_arg(args, long)); break;
+                        case 's': SerialPrint(va_arg(args, char*)); break;
+                        default: ASSERT(false, "SerialPrintf: invalid char after %");
+                    }
+                    str++;
+                } else {
+                    SerialPutChar(*str++);
+                }
+            }
+
+            va_end(args);
+        }
     }
 }

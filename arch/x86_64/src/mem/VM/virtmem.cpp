@@ -95,6 +95,7 @@ namespace Kernel {
         }
 
         void* Manager::AllocatePages(size_t count, unsigned long options, bool shared) {
+            acquire(&mutex);
             // Get new physical page
             uint64_t physical = PM::Manager::the().AllocatePages(count);
             // Go through mem to find new memory
@@ -121,10 +122,12 @@ namespace Kernel {
                             uint64_t map_virt = new_object->base + (i * 4096);
                             MapPage(map_phys, map_virt, options);
                         }
+                        release(&mutex);
                         return (void*)new_object->base;
                     }
                 }
             }
+            release(&mutex);
             return NULL; // No memory available
         }
 
@@ -137,6 +140,7 @@ namespace Kernel {
 
         // Create a new page table.
         uint64_t Manager::CreateNewPageTable() {
+            // acquire(&mutex);
             // Get entry for the kernel mappings
             uint64_t kernel_mappings = CalculateRecursiveLevel4()[511];
             uint64_t* new_table_virtual = (uint64_t*)AllocatePages(1);
@@ -144,12 +148,16 @@ namespace Kernel {
 
             // Copy kernel mapping over
             new_table_virtual[511] = kernel_mappings;
+            // Add recursive mapping
+            new_table_virtual[0x1F0] = new_table_physical | 0b11;
+            // release(&mutex);
             return new_table_physical;
         }
 
 
         // Maps addresses in the current page table using recursive mapping.
         void Manager::MapPage(unsigned long phys, unsigned long virt, unsigned long options) {
+            // acquire(&mutex);
             int lvl4 = (virt >> 39) & 0b111111111;
             int lvl3 = (virt >> 30) & 0b111111111;
             int lvl2 = (virt >> 21) & 0b111111111;
@@ -157,29 +165,30 @@ namespace Kernel {
             // Check if the level 3 table exists
             uint64_t* lvl4_table = CalculateRecursiveLevel4(0);
             if(~(lvl4_table[lvl4]) & 1) {
-                lvl4_table[lvl4] = (uint64_t)PM::Manager::the().AllocatePages() | 0b11;
+                lvl4_table[lvl4] = (uint64_t)PM::Manager::the().AllocatePages() | 0b111;
                 InvalidatePage((uint64_t)CalculateRecursiveLevel3(lvl4));
                 memset((void*)((uint64_t)CalculateRecursiveLevel3(lvl4)), 0x00, 4096);
             }
             uint64_t* lvl3_table = CalculateRecursiveLevel3(lvl4);
             // Check if the level 2 table exists
             if(~(lvl3_table[lvl3]) & 1) {
-                lvl3_table[lvl3] = (uint64_t)PM::Manager::the().AllocatePages() | 0b11;
+                lvl3_table[lvl3] = (uint64_t)PM::Manager::the().AllocatePages() | 0b111;
                 InvalidatePage((uint64_t)CalculateRecursiveLevel2(lvl3, lvl4));
                 memset((void*)((uint64_t)CalculateRecursiveLevel2(lvl3, lvl4)), 0x00, 4096);
             }
             uint64_t* lvl2_table = CalculateRecursiveLevel2(lvl3, lvl4);
             // Check if the level 1 table exists
             if(~(lvl2_table[lvl2]) & 1) {
-                lvl2_table[lvl2] = (uint64_t)PM::Manager::the().AllocatePages() | 0b11;
+                lvl2_table[lvl2] = (uint64_t)PM::Manager::the().AllocatePages() | 0b111;
                 InvalidatePage((uint64_t)CalculateRecursiveLevel1(lvl2, lvl3, lvl4));
                 memset((void*)((uint64_t)CalculateRecursiveLevel1(lvl2, lvl3, lvl4)), 0x00, 4096);
             }
             uint64_t* lvl1_table = CalculateRecursiveLevel1(lvl2, lvl3, lvl4);
             // Set the entry
-            ASSERT((phys >> 63) & 1, "Physical address would set NX bit!");
+            ASSERT(phys & 8000000000000000, "Physical address would set NX bit!");
             lvl1_table[lvl1] = (phys & 0xFFFFFFFFFF000) | options;
             InvalidatePage((virt & 0xFFFFFFFFFF000));
+            // release(&mutex);
         }
         
 

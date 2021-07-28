@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <CPP/vector.h>
+#include <CPP/mutex.h>
 
 namespace Kernel {
     namespace PM {
@@ -55,7 +56,7 @@ namespace Kernel {
                 return instance;
             }
         private:
-            
+            mutex_t mutex;
 
             Vector<PMObject*> physicalmemory;
         };

@@ -3,6 +3,7 @@
 #include <interrupts.h>
 #include <panic.h>
 #include <debug/serial.h>
+#include <processes/syscalls/syscall.h>
 
 // Interrupts from CPU (Page fault, GPF, ...)
 extern "C" void isr0 ();
@@ -56,6 +57,8 @@ extern "C" void irq13();
 extern "C" void irq14();
 extern "C" void irq15();
 
+// Syscall interrupt
+extern "C" void isr128();
 
 
 // C-to-Cpp function jump basically
@@ -77,13 +80,17 @@ namespace Kernel {
 
                 // Decode error
                 if(registers->error & 1) {
-                    Debug::SerialPrint("Present ");
+                    Debug::SerialPrint("Present, ");
                 }
                 if(registers->error & 0b10) {
-                    Debug::SerialPrint("Write ");
+                    Debug::SerialPrint("Write, ");
+                } else {
+                    Debug::SerialPrint("Read, ");
                 }
                 if(registers->error & 0b100) {
-                    Debug::SerialPrint("User ");
+                    Debug::SerialPrint("In User, ");
+                } else {
+                    Debug::SerialPrint("In Supervisor mode, ");
                 }
                 if(registers->error & 0b1000) {
                     Debug::SerialPrint("ReservedWrite ");
@@ -94,23 +101,35 @@ namespace Kernel {
 
                 // Make new line and print the faulting address
                 Debug::SerialPrint("\n\r");
-                Debug::SerialPrint("Faulting address: ");
                 uint64_t faulting;
                 // Get the faulting address from cr2
                 asm volatile("movq %%cr2, %0" : "=r"(faulting));
-                Debug::SerialPrintInt(faulting, 16);
-
-                // Make a new line
-                Debug::SerialPrint("\n\r");
+                Debug::SerialPrintf("Faulting address: %x\r\n", faulting);
+                Debug::SerialPrintf("Faulting RIP: %x\r\n", registers->rip);
                 // Crash
                 Debug::Panic("Unrecoverable page fault");
             }
             case ExceptionID::GeneralProtectionFault: {
                 Debug::SerialPrint("GENERAL PROTECTION FAULT\n\r");
-                Debug::SerialPrint("Error code: "); Debug::SerialPrintInt(registers->error, 10);
-                Debug::SerialPrint("\n\rFaulting RIP: "); Debug::SerialPrintInt(registers->rip, 16); Debug::SerialPrint("\n\r");
+                Debug::SerialPrintf("Error code: %i\r\nFaulting RIP: %x\r\n", (int)registers->error, (uint64_t)registers->rip);
+                if(registers->error) {
+                    if(registers->error & 0b1) { Debug::SerialPrint("External "); }
+                    switch((registers->error &0b110) >> 1) {
+                        case 0: Debug::SerialPrint("GDT "); break;
+                        case 1: Debug::SerialPrint("IDT "); break;
+                        case 2: Debug::SerialPrint("LDT "); break;
+                        case 3: Debug::SerialPrint("IDT "); break;
+                    }
+                    Debug::SerialPrintf("\r\nSelector index: %i\r\n", (registers->error & ~0b111) >> 3);
+                }
                 Kernel::Debug::Panic("General protection fault");
             }
+            // Syscalls
+            case 0x80: {
+                SyscallHandler::the().HandleSyscall(registers);
+                break;
+            }
+
             default: {
                 Debug::SerialPrint("UNHANDLED INTERRUPT: "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
                 Debug::Panic("interrupt not handled");
@@ -128,12 +147,12 @@ namespace Kernel {
 
     void Interrupts::HandleIRQ(ISRRegisters* registers) {
         // Check if a handler exists
+        // Debug::SerialPrint("irq: got irq "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
         if(irq_handlers[registers->int_num] == NULL) {
             Debug::SerialPrint("irq: no handler registered for irq "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
         } else {
             irq_handlers[registers->int_num](registers);
         }
-        // Debug::SerialPrint("Got interrupt "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
     
         // Send EOI
         if(registers->int_num >= 8) { outb(pic2_io_data, 0x20); }
@@ -218,6 +237,9 @@ namespace Kernel {
         CreateEntry(45, irq13, InterruptGate);
         CreateEntry(46, irq14, InterruptGate);
         CreateEntry(47, irq15, InterruptGate);
+
+        // Syscall ISR
+        CreateEntry(0x80, isr128, 0xee);
 
         // Setup IDT pointer
         idt_pointer.base = (uint64_t)&idt;

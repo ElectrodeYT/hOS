@@ -36,6 +36,11 @@ SECTIONS
         *(.bss*)
     }
 
+    .testa : {
+        *(COMMON)
+        KEEP(*(.testa*))
+    }
+
     .heap : {
         KEEP(*(.heap*))
     }

@@ -15,6 +15,8 @@ namespace Kernel {
         // Container of Threads and memory
         struct Process {
             int pid;
+            bool isKernel;
+            char* name;
             uint64_t page_table;
             Vector<Thread*> threads;
             // Store the base address of all mappings.

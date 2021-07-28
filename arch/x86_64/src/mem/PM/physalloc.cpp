@@ -21,6 +21,8 @@ namespace Kernel {
         }
 
         uint64_t Manager::AllocatePages(int count) {
+            // Acquire physical memory mutex
+            acquire(&mutex);
             // Look through the vector to find unallocated pages
             for(size_t i = 0; i < physicalmemory.size(); i++) {
                 PMObject* curr = physicalmemory.at(i);
@@ -30,6 +32,8 @@ namespace Kernel {
                     if(curr->size == byte_count) {
                         // We got the exact size, change it to allocated and return its base
                         curr->allocated = true;
+                        // Relase the physical memory mutex
+                        release(&mutex);
                         return curr->base;
                     }
                     if(curr->size < byte_count) {
@@ -46,6 +50,8 @@ namespace Kernel {
                     curr->size -= byte_count;
                     // Insert new_object at current position
                     physicalmemory.insert(i, new_object);
+                    // Relase the physical memory mutex
+                    release(&mutex);
                     return new_object->base;
                 }
             }

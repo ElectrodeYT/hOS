@@ -28,30 +28,41 @@ irq\n:
 
 isr_common:
     // Push all registers
+	pushq %rbp
 	pushq %rdi
 	pushq %rsi
 	pushq %rdx
 	pushq %rcx
+	pushq %rbx
 	pushq %rax
 	pushq %r8
 	pushq %r9
 	pushq %r10
 	pushq %r11
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
 
 	mov %rsp, %rdi
 .extern isr_main
 	call isr_main
-	
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
 	popq %r11
 	popq %r10
 	popq %r9
 	popq %r8
 	popq %rax
+	popq %rbx
 	popq %rcx
 	popq %rdx
 	popq %rsi
 	popq %rdi
-	add $16, %rsp // Info, error field
+	popq %rbp
+	add $16, %rsp // Info field
 	iretq
 
 
@@ -143,3 +154,5 @@ int_irq 12
 int_irq 13
 int_irq 14
 int_irq 15
+
+int_noerr 128
