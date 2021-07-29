@@ -7,12 +7,14 @@ AS := $(ARCH)-elf-as
 C_ARGS := -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -O2 -Wall -Wextra -pedantic -g -Iarch/$(ARCH)/inc -Iagnostic/inc
 CPP_ARGS := -ffreestanding -O2 -Wall -Wextra -pedantic -fno-exceptions -fno-rtti -mno-mmx -mno-sse -mno-sse2 -mno-sse3 \
 			-mno-3dnow -mgeneral-regs-only -mno-red-zone -fno-stack-protector -fPIC -g -std=c++2a \
-			-fno-threadsafe-statics -Iarch/$(ARCH)/inc -Iagnostic/inc -include "mem.h" -include "panic.h"
+			-fno-threadsafe-statics -Iarch/$(ARCH) -Iagnostic -include "mem.h" -include "panic.h"
 AS_ARGS := -g
 
-assembly := $(shell find arch/$(ARCH)/src/asm/ -name *.s)
-c := $(shell find arch/$(ARCH)/src/ agnostic/src/ -name *.c)
-cpp := $(shell find arch/$(ARCH)/src/ agnostic/src/ -name *.cpp)
+SYSROOT := $(shell pwd)/sysroot
+
+assembly := $(shell find arch/$(ARCH)/asm/ -name *.s)
+c := $(shell find arch/$(ARCH)/ agnostic/ -name *.c)
+cpp := $(shell find arch/$(ARCH)/ agnostic/ -name *.cpp)
 
 assembly_o := $(filter-out crtn.o,$(filter-out crti.o,$(assembly:%.s=%.o)))
 
@@ -26,19 +28,19 @@ boot_image := arch/$(ARCH)/hKern.img
 objects := $(assembly_o) $(c_o) $(cpp_o)
 
 # Services we need to boot
-services := base/example/example.mod
+services := base/example/testa.bin base/example/testb.bin
 
 .PHONY: all create-image link qemu qemu-debug cloc
 
-%.o: %.s
+%.o: %.s $(services)
 	@echo "[ASM]		" $< $@
 	@$(AS) $< -o $@ $(AS_ARGS)
 
-%.o: %.c
+%.o: %.c $(services)
 	@echo "[C]		" $< $@
 	@$(C) -c $< -o $@ $(C_ARGS)
 
-%.o: %.cpp
+%.o: %.cpp $(services)
 	@echo "[CPP]		" $< $@
 	@$(CPP) -c $< -o $@ $(CPP_ARGS)
 
@@ -47,7 +49,7 @@ link $(kernel): $(objects)
 	@$(C) -T $(linker_file) -o $(kernel) -ffreestanding -nostdlib -O2 $(objects) -lgcc
 
 
-create-image $(boot_image): $(services) $(kernel)
+create-image $(boot_image): $(kernel)
 	@$(MAKE) -C arch/$(ARCH) create-image
 
 compile-services $(services):
