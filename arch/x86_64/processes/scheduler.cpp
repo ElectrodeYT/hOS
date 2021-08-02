@@ -9,131 +9,54 @@
 #include <early-boot.h>
 #include <processes/elf.h>
 #include <hardware/instructions.h>
+#include <processes/syscalls/syscall.h>
+#include <errno.h>
 
 namespace Kernel {
     namespace Processes {
         void Scheduler::Init() {
             // TODO
         }
-
-        int Scheduler::CreateProcess(uint8_t* data, size_t length, uint64_t initial_instruction_pointer, char* name, bool is_kernel) {
-            // Create process
-            Process* new_proc = new Process;
-            new_proc->page_table = VM::Manager::the().CreateNewPageTable();
-            // Create the string in it, and copy the given name over
-            size_t name_len = strlen(name);
-            new_proc->name = new char[name_len + 1];
-            memcopy(name, new_proc->name, name_len + 1);
-
-            Debug::SerialPrintf("Creating new process %s\r\n", new_proc->name);
-
-            // We want to save the current page table, as we need to switch to it later
-            uint64_t curr_page_table = VM::Manager::the().CurrentPageTable();
-            // Switch into new page table
-            VM::Manager::the().SwitchPageTables(new_proc->page_table);
-
-            // The process data should be located in V0x8000 and above
-
-            // We want to allocate new memory and copy it into there.
-            // To do this, we first allocate enough pages to copy all the data into it
-            uint64_t page_count = 0;
-            for(uint64_t i = 0; i < length; i += 4096) {
-                uint64_t phys = PM::Manager::the().AllocatePages();
-                // Map page
-                VM::Manager::the().MapPage(phys, 0x8000 + i, 0b111);
-                page_count++;
+        int64_t Scheduler::CreateProcessImpl(uint8_t* data, size_t length, char** argv, int argc, char** envp, int envc) {
+            // Sanity checks
+            if(!argv) { return -EINVAL; }
+            if(!envp) { return -EINVAL; }
+            if(argc < 0) { return -EINVAL; }
+            if(envc < 0) { return -EINVAL; }
+            // Calculate argv size
+            size_t argv_size = 0;
+            for(size_t i = 0; i < (size_t)argc; i++) {
+                argv_size += strlen(argv[i]) + 1;
+                argv_size += 8; // Pointer
             }
+            if(argv_size > 0x1000) { return -EINVSZ; }
+            // Calculate envp size
+            size_t envp_size = 0;
+            for(size_t i = 0; i < (size_t)envc; i++) {
+                envp_size += strlen(envp[i]) + 1;
+                // Due to envp being hella weird, we actually have to pass a array of pointers
+                // that point to strings, we need to take the pointer size into account
+                envp_size += 8;
+            } 
+            envp_size += 8; // Terminator pointer
+            if(envp_size > 0x1000) { return -EINVSZ; }
 
-            // Create VMObject mapping
-            VM::Manager::VMObject* obj = new VM::Manager::VMObject(true, false);
-            obj->base = 0x8000;
-            obj->size = page_count * 4096;
-            new_proc->mappings.push_back(obj);
-
-            // Copy data
-            memcopy((void*)data, (void*)0x8000, length);
-
-            // Memory has been mapped and copied, switch back to old page table
-            VM::Manager::the().SwitchPageTables(curr_page_table);
-
-            // Initialize main thread
-            Thread* main_thread = new Thread;
-            main_thread->tid = 0;
-            main_thread->regs.rip = initial_instruction_pointer;
-            main_thread->regs.rflags = 0x202;
-            main_thread->regs.cs = 0x18 | 0b11;
-            main_thread->regs.ss = 0x20 | 0b11;
-            main_thread->blocked = Thread::BlockState::Running;
-            main_thread->regs.page_table = new_proc->page_table;
-            // Create syscall thread stack
-            VM::Manager::VMObject* syscall_stack = new VM::Manager::VMObject(true, false);
-            syscall_stack->base = (uint64_t)VM::Manager::the().AllocatePages(4);
-            syscall_stack->size = 4 * 4096;
-            main_thread->syscall_stack_map = syscall_stack;
-
-            // Attach thread to new process
-            new_proc->threads.push_back(main_thread);
-
-            // Add process
-            processes.push_back(new_proc);
-            return 0;
-        }
-
-        int Scheduler::CreateService(uint64_t initial_instruction_pointer, char* name) {
-            // Create new process
-            Process* new_proc = new Process;
-            new_proc->page_table = VM::Manager::the().CurrentPageTable();
-            new_proc->is_kernel = true;
-            
-            // Create the string in it, and copy the given name over
-            size_t name_len = strlen(name);
-            new_proc->name = new char[name_len + 1];
-            memcopy(name, new_proc->name, name_len + 1);
-
-            Debug::SerialPrintf("Creating new kernel service %s\r\n", new_proc->name);
-
-            // Initialize main thread
-            Thread* main_thread = new Thread;
-            main_thread->tid = 0;
-            main_thread->regs.rip = initial_instruction_pointer;
-            main_thread->regs.rflags = 0x202;
-            main_thread->regs.cs = 0x08;
-            main_thread->regs.ss = 0x10;
-            main_thread->blocked = Thread::BlockState::Running;
-            // Initialize new stack
-            VM::Manager::VMObject* stack = new VM::Manager::VMObject(true, false);
-            stack->base = (uint64_t)VM::Manager::the().AllocatePages(16);
-            stack->size = 4096 * 16;
-            new_proc->mappings.push_back(stack);
-            main_thread->regs.rsp = stack->base + stack->size;
-            main_thread->regs.page_table = VM::Manager::the().CurrentPageTable();
-/*
-            // Create syscall thread stack
-            VM::Manager::VMObject* syscall_stack = new VM::Manager::VMObject(true, false);
-            syscall_stack->base = (uint64_t)VM::Manager::the().AllocatePages(4);
-            syscall_stack->size = 4 * 4096;
-            main_thread->syscall_stack_map = syscall_stack;
-*/
-            new_proc->threads.push_back(main_thread);
-            processes.push_back(new_proc);
-            return 0;
-        }
-
-        int Scheduler::CreateProcessFromElf(uint8_t* data, size_t length, char* name) {
             ELF elf(data, length);
             if(!elf.readHeader()) {
-                Debug::SerialPrintf("Failed to load ELF file for process %s\r\n", name);
-                return -1;
+                Debug::SerialPrintf("Failed to load ELF file for process %s\r\n", argv[0]);
+                return -EINVAL;
             }
 
-            
             // Create process
             Process* new_proc = new Process;
             new_proc->page_table = VM::Manager::the().CreateNewPageTable();
+            new_proc->pid = GetNextPid();
+            // Set the parent
+            new_proc->parent = 0;
             // Create the string in it, and copy the given name over
-            size_t name_len = strlen(name);
+            size_t name_len = strlen(argv[0]);
             new_proc->name = new char[name_len + 1];
-            memcopy(name, new_proc->name, name_len + 1);
+            memcopy(argv[0], new_proc->name, name_len + 1);
 
             Debug::SerialPrintf("Creating new process %s\r\n", new_proc->name);
 
@@ -150,8 +73,10 @@ namespace Kernel {
                 if(section->loadable) {
                     // TODO: correct permissions
                     VM::Manager::VMObject* mapping = new VM::Manager::VMObject(true, false);
-                    mapping->base = section->vaddr;
+                    mapping->base = section->vaddr & ~(0xFFF);
                     mapping->size = round_to_page_up(section->segment_size);
+
+                    Debug::SerialPrintf("Mapping for ELF segment %i: base %x, size %x\r\n", i, mapping->base, mapping->size);
 
                     // Allocate it
                     size_t page_count = 0;
@@ -163,10 +88,50 @@ namespace Kernel {
                     }
 
                     // Now copy to it
-                    section->copy_out((void*)mapping->base);
+                    section->copy_out((void*)section->vaddr);
                     new_proc->mappings.push_back(mapping);
                 }
             }
+
+            // Create main stack
+            const uint64_t stack_size = 0x4000;
+            uint64_t stack_base = SyscallHandler::the().mmap(new_proc, stack_size, NULL);
+
+            // Copy argv
+            uint64_t argv_base = SyscallHandler::the().mmap(new_proc, argv_size, &argv_size);
+            uint64_t envp_base = SyscallHandler::the().mmap(new_proc, envp_size, &envp_size);
+            
+
+            // Copy argv
+            uint64_t current_front = argv_base;
+            uint64_t current_back = argv_base + argv_size;
+            for(size_t i = 0; i < (size_t)argc; i++) {
+                size_t string_len = strlen(argv[i]);
+                current_back -= string_len + 1;
+                memcopy(argv[i], (void*)current_back, string_len + 1);
+                // Set pointer
+                *(volatile uint64_t*)(current_front) = current_back;
+                current_front += 8;
+            }
+
+            // Copy envp
+            current_front = envp_base;
+            current_back = envp_base + envp_size;
+            for(size_t i = 0; i < (size_t)envc; i++) {
+                size_t string_len = strlen(argv[i]);
+                current_back -= string_len + 1;
+                memcopy(argv[i], (void*)current_back, string_len + 1);
+                // Set pointer
+                *(volatile uint64_t*)(current_front) = current_back;
+                current_front += 8;
+            }
+            // For envp we need to set the last pointer to 0 as well
+            *(volatile uint64_t*)(current_front) = 0;
+
+            // We put &argc and &argv on the stack
+            // *(uint64_t* volatile)(stack_base + stack_size - 8) = argv_base;
+            // *(uint64_t* volatile)(stack_base + stack_size - 16) = envp_base;
+
             // The sections have been copied out, we can now switch the page table back
             VM::Manager::the().SwitchPageTables(curr_page_table);
 
@@ -180,18 +145,110 @@ namespace Kernel {
             main_thread->blocked = Thread::BlockState::Running;
             main_thread->regs.page_table = new_proc->page_table;
 
+            main_thread->stack_base = stack_base;
+            main_thread->stack_size = stack_size;
+            main_thread->regs.rsp = stack_base + stack_size; // -16 for the two pointers on the stack
+            main_thread->regs.rdi = argc;
+            main_thread->regs.rsi = argv_base;
+            main_thread->regs.rdx = envc;
+            main_thread->regs.rcx = envp_base;
+            
             // Create syscall thread stack
+            // TODO: guard pages
             VM::Manager::VMObject* syscall_stack = new VM::Manager::VMObject(true, false);
             syscall_stack->base = (uint64_t)VM::Manager::the().AllocatePages(4);
             syscall_stack->size = 4 * 4096;
             main_thread->syscall_stack_map = syscall_stack;
+
+
 
             // Attach thread to new process
             new_proc->threads.push_back(main_thread);
 
             // Add process
             processes.push_back(new_proc);
-            return 0;
+            return new_proc->pid;
+        }
+
+        int64_t Scheduler::CreateProcess(uint8_t* data, size_t length, const char* name) {
+            // Create a fake envc, envp
+            char* fake_env[1] = { NULL };
+            // Create a argv containing only the program name
+            char* argv[1] = { (char*)name };
+            return CreateProcessImpl(data, length, argv, 1, fake_env, 0); // parent = UINT64_MAX; this will make CreateProcessImpl set parent to itself 
+        }
+
+        int64_t Scheduler::CreateProcess(uint8_t* data, size_t length, char** argv, int argc) {
+            // We use the envc, envp of the parent
+            // TODO: yeah that
+            char* fake_env[1] = { NULL };
+            return CreateProcessImpl(data, length, argv, argc, fake_env, 0);
+        }
+
+        int64_t Scheduler::ForkCurrent(Interrupts::ISRRegisters* regs) {
+            // Create new process
+            Processes::Process* new_proc = new Processes::Process();
+            Processes::Process* curr_proc = CurrentProcess();
+            
+            // Copy the name over
+            size_t name_len = strlen(curr_proc->name);
+            new_proc->name = new char[name_len + 1];
+            new_proc->pid = GetNextPid();
+            memcopy(curr_proc->name, new_proc->name, name_len);
+
+            // Copy the memory mappings over
+            new_proc->page_table = VM::Manager::the().CreateNewPageTable();
+            uint64_t current_table = VM::Manager::the().CurrentPageTable();
+            for(size_t i = 0; i < curr_proc->mappings.size(); i++) {
+                uint64_t* physical_addresses = new uint64_t[curr_proc->mappings.at(i)->size / 4096];
+                VM::Manager::VMObject* new_cow = curr_proc->mappings.at(i)->copyAsCopyOnWrite(physical_addresses);
+                // Now we need to switch to the new page table
+                VM::Manager::the().SwitchPageTables(new_proc->page_table);
+                // Now we need to map all the pages as read only
+                for(size_t x = 0; x < new_cow->size; x += 4096) {
+                    VM::Manager::the().MapPage(physical_addresses[x / 4096], new_cow->base + x, 0b101);
+                }
+                new_proc->mappings.push_back(new_cow);
+                // Switch back
+                VM::Manager::the().SwitchPageTables(current_table);
+                delete physical_addresses;
+            }
+
+            // Create the new thread
+            Thread* main_thread = new Thread();
+            // Very fun code
+            main_thread->regs.rax = 0;
+            main_thread->regs.rbp = regs->rbp;
+            main_thread->regs.rbx = regs->rbx;
+            main_thread->regs.rcx = regs->rcx;
+            main_thread->regs.rdi = regs->rdi;
+            main_thread->regs.rdx = regs->rdx;
+            main_thread->regs.rip = regs->rip;
+            main_thread->regs.rsi = regs->rsi;
+            main_thread->regs.rsp = regs->rsp;
+            main_thread->regs.r8 = regs->r8;
+            main_thread->regs.r9 = regs->r9;
+            main_thread->regs.r10 = regs->r10;
+            main_thread->regs.r11 = regs->r11;
+            main_thread->regs.r12 = regs->r12;
+            main_thread->regs.r13 = regs->r13;
+            main_thread->regs.r14 = regs->r14;
+            main_thread->regs.r15 = regs->r15;
+            main_thread->regs.rflags = regs->rflags;
+            main_thread->regs.cs = regs->cs;
+            main_thread->regs.ss = regs->ss;
+            main_thread->regs.page_table = new_proc->page_table;
+
+            // Create syscall thread stack
+            // TODO: guard pages
+            VM::Manager::VMObject* syscall_stack = new VM::Manager::VMObject(true, false);
+            syscall_stack->base = (uint64_t)VM::Manager::the().AllocatePages(4);
+            syscall_stack->size = 4 * 4096;
+            main_thread->syscall_stack_map = syscall_stack;
+
+            new_proc->threads.push_back(main_thread);
+            processes.push_back(new_proc);
+            return new_proc->pid;
         }
 
         void Scheduler::SaveContext(Interrupts::ISRRegisters* regs) {
@@ -246,15 +303,33 @@ namespace Kernel {
             Thread* thread = proc->threads.at(curr_thread);
 
             // Check if this thread should be destroyed
-            if(thread->blocked == Processes::Thread::BlockState::ShouldDestroy) {
+            if(thread->blocked == Thread::BlockState::ShouldDestroy) {
                 VM::Manager::the().FreePages((void*)thread->syscall_stack_map->base);
                 delete thread;
                 proc->threads.remove(curr_thread);
                 goto begin;
+            } else if(thread->blocked == Thread::BlockState::WaitingOnMessage && proc->msg_count) {
+                // This thread is blocked waiting for a IPC message, and we got one
+                size_t msg_size = proc->nextMessageSize();
+                if(msg_size > thread->regs.rcx) {
+                    // This message is bigger than the buffer, set error and unblock
+                    thread->regs.rax = -EINVSZ;
+                    thread->blocked = Thread::BlockState::Running;
+                } else {
+                    // We can copy this message to the process
+                    if(!proc->attemptCopyToUser(thread->regs.rbx, msg_size, proc->buffer)) {
+                        // Copy failed
+                        thread->regs.rax = -EINVAL;
+                    } else {
+                        // Copy succeded
+                        thread->regs.rax = msg_size;
+                    }
+                    thread->blocked = Thread::BlockState::Running;
+                }
             }
 
             // Check if this thread can be scheduled
-            if(thread->blocked != Processes::Thread::BlockState::Running) { goto begin; }
+            if(thread->blocked != Thread::BlockState::Running) { goto begin; }
 
             ASSERT(proc->threads.size() > 0, "Scheduler: process has no threads registered with it!");
 
@@ -289,8 +364,9 @@ namespace Kernel {
         }
 
         void Scheduler::KillCurrentProcess() {
+            ASSERT(processes.size() > curr_proc, "KillCurrentProcess() called while curr_proc is out of range!");
             Process* proc = processes.at(curr_proc);
-            Debug::SerialPrintf("Killing %s\r\n", proc->name);
+            // Debug::SerialPrintf("Killing %s\r\n", proc->name);
             uint64_t state = save_irqdisable();
             
             // Demap all the stacks and delete all threads
@@ -323,6 +399,89 @@ namespace Kernel {
             running_proc_killed = true;
             // Restart interrupts
             irqrestore(state);
+        }
+
+        int64_t Scheduler::IPCHint(int64_t msg_len, int64_t pipe_name_string, int64_t pipe_name_string_len) {
+            Process* proc = processes.at(curr_proc);
+            if(msg_len == 0) {
+                // This process does not (at the moment) accept any IPC requests
+                proc->accepts_ipc = false;
+                if(proc->buffer) {
+                    delete proc->buffer;
+                    proc->msg_count = 0;
+                    proc->buffer_size = 0;
+                }
+            } else {
+                // No IPC message may be bigger than 16k (0x4000)
+                if(msg_len > 0x4000) { return -EINVSZ; }
+                proc->buffer = new uint64_t[msg_len / 8];
+                proc->buffer_size = msg_len;
+                proc->accepts_ipc = true;
+            }
+
+            if(pipe_name_string) {
+                // Pipe string must be smaller than 511 chars
+                if(pipe_name_string_len < 0 || pipe_name_string_len > 511) { return -EINVSZ; }
+                char* string = new char[pipe_name_string_len + 1];
+                if(!proc->attemptCopyFromUser(pipe_name_string, pipe_name_string_len, string)) { return -EINVAL; }
+                string[pipe_name_string_len] = '\0';
+                // Verify no pipe named like this exists
+                if(FindNamedPipe(string)) { return -EEXIST; }
+                IPCNamedPipe* pipe = new IPCNamedPipe;
+                pipe->name = string;
+                pipe->pid = proc->pid;
+                named_pipes.push_back(pipe);
+            }
+            return 0;
+        }
+
+        int64_t Scheduler::IPCRecv(int64_t buffer_len, int64_t buffer, int64_t should, Interrupts::ISRRegisters* regs) {
+            if(!buffer) { return -EINVAL; }
+            // Check if any messages are available
+            Process* proc = CurrentProcess();
+            if(proc->msg_count) {
+                // There is a message waiting, then we can just copy it (providing the size works out);
+                uint64_t msg_size = proc->nextMessageSize();
+                if(msg_size > (uint64_t)buffer_len) { return -EINVSZ; }
+                if(!proc->attemptCopyToUser(buffer, msg_size, proc->buffer)) { return -EINVAL; }
+                memcopy((void*)((uint64_t)(proc->buffer) + msg_size), proc->buffer, proc->buffer_size - msg_size);
+                proc->msg_count--;
+            } else {
+                if(!should) { return -EWOULDBLOCK; }
+                // Block the process pending message
+                asm volatile("cli"); // disable interrupts for now
+                SaveContext(regs);
+                proc->threads.at(curr_thread)->blocked = Thread::BlockState::WaitingOnMessage;
+                Schedule(regs);
+            }
+            return 0;
+        }
+
+        int64_t Scheduler::IPCSendPipe(int64_t buffer, int64_t buffer_len, int64_t pipe_name_string, int64_t pipe_name_string_len) {
+            if(!buffer || !pipe_name_string) { return -EINVAL; }
+            if(buffer_len < 0 || pipe_name_string_len < 0) { return -EINVAL; }
+            // Copy out the string
+            Process* proc = CurrentProcess();
+            char* pipe_name = new char[pipe_name_string_len + 1];
+            if(!proc->attemptCopyFromUser(pipe_name_string, pipe_name_string_len, pipe_name)) { return -EINVAL; }
+            pipe_name[pipe_name_string_len] = '\0';
+
+            // Get the pipe
+            IPCNamedPipe* pipe = FindNamedPipe(pipe_name);
+            if(!pipe) { return -ENOENT; }
+            Process* destination_proc = GetProcessByPid(pipe->pid);
+            if(!destination_proc->accepts_ipc) { return -EPERM; }
+            
+            // Check if the buffer size allows it
+            if((uint64_t)buffer_len > (destination_proc->buffer_size - destination_proc->currentBufferOffset())) { return -EINVSZ; }
+            // Set pid and size
+            volatile uint64_t* buffer_as_long = (volatile uint64_t*)((uint64_t)destination_proc->buffer + destination_proc->currentBufferOffset());
+            buffer_as_long[0] = proc->pid;
+            buffer_as_long[1] = buffer_len;
+            // Copy the message
+            proc->attemptCopyFromUser(buffer, buffer_len, (void*)((uint64_t)destination_proc->buffer + destination_proc->currentBufferOffset() + 16));
+            destination_proc->msg_count++;
+            return 0;
         }
 
         void Scheduler::FirstSchedule() {

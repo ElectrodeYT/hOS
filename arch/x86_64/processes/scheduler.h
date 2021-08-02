@@ -5,25 +5,22 @@
 #include <processes/process.h>
 #include <CPP/vector.h>
 #include <interrupts.h>
-
+#include <CPP/string.h>
 #include <stddef.h>
 
 namespace Kernel {
     namespace Processes {
         class Scheduler {
         public:
+            // Named IPC pipe
+            struct IPCNamedPipe {
+                char* name;
+                int64_t pid;
+            };
+
             void Init();
 
             void TimerCallback(Interrupts::ISRRegisters* regs);
-
-            // Create a new process with its own memory map.
-            // data must be page aligned, in kernel memory, and length should be at page boundries.
-            // Returns PID of the process
-            int CreateProcess(uint8_t* data, size_t length, uint64_t initial_instruction_pointer, char* name, bool inKernel);
-
-            // Create a new service which runs with kernel mappings.
-            // Returns PID of the process
-            int CreateService(uint64_t initial_instruction_pointer, char* name);
 
             // Save the context of the current process.
             void SaveContext(Interrupts::ISRRegisters* regs);
@@ -39,8 +36,50 @@ namespace Kernel {
             void KillCurrentProcess();
 
             // Load a ELF file.
-            int CreateProcessFromElf(uint8_t* data, size_t length, char* name);
+            // This is used to create "first pids"; Other exec and forks should result from other versions of this process.
+            // This initializes argc to 1 and argv to name, and sets env and enc to NULL.
+            int64_t CreateProcess(uint8_t* data, size_t length, const char* name);
 
+            // Create a process as a parent from another process.
+            // This copies the enviroment from the parent process.
+            int64_t CreateProcess(uint8_t* data, size_t length, char** argv, int argc);
+
+            // Fork the current process. 
+            // This creates a new process, copies all its memory mappings, and returns the new process's PID.
+            // The new process will have RAX set to 0.
+            // The new process does not share the same page table, but does share the same memory contents.
+            int64_t ForkCurrent(Interrupts::ISRRegisters* regs);
+
+            // Exec a new process.
+            // This creates a new process in place of the current process. It will decrease the refcount of all its VMObjects,
+            // and deallocate them if neccesary.
+            // The enviroment is taken from the execing process.
+            int Exec(uint8_t* data, size_t length, char** argv, int arc);
+
+            // Implementation of IPCHint syscall.
+            int64_t IPCHint(int64_t msg_len, int64_t pipe_name_string, int64_t pipe_name_string_len);
+
+            // Implementation of IPCRecv syscall.
+            int64_t IPCRecv(int64_t buffer_len, int64_t buffer, int64_t should, Interrupts::ISRRegisters* regs);
+
+            // Implementation of IPCSendpipe syscall
+            int64_t IPCSendPipe(int64_t buffer, int64_t buffer_len, int64_t pipe_name_string, int64_t pipe_name_string_len);
+
+            IPCNamedPipe* FindNamedPipe(const char* name) {
+                for(size_t i = 0; i < named_pipes.size(); i++) {
+                    IPCNamedPipe* curr = named_pipes.at(i);
+                    if(strcmp(curr->name, name) == 0) { return curr; }
+                }
+                return NULL;
+            }
+
+            // Get a process by PID
+            inline Process* GetProcessByPid(int64_t pid) {
+                for(size_t i = 0; i < processes.size(); i++) {
+                    if(processes.at(i)->pid == pid) { return processes.at(i); }
+                }
+                return NULL;
+            }
 
             inline Process* CurrentProcess() { return processes.at(curr_proc); }
 
@@ -49,13 +88,29 @@ namespace Kernel {
                 return instance;
             }
 
+            size_t curr_proc;
+            size_t curr_thread;
+
         private:
-            const int timer_switch = 1;
+            // Implementation of CreateProcess.
+            int64_t CreateProcessImpl(uint8_t* data, size_t length, char** argv, int arc, char** envp, int envc);
+
+            // Get the next available PID
+            int64_t GetNextPid() {
+                if(processes.size() == 0) { return 0; }
+                int64_t curr = 1;
+                for(size_t i = 0; i < processes.size(); i++) {
+                    if(processes.at(i)->pid == curr) { curr++; i = 0; }
+                }
+                return curr;
+            }
+
+            const int timer_switch = 5;
             int timer_curr = 0;
 
-            int curr_proc;
-            int curr_thread;
 
+
+            Vector<IPCNamedPipe*> named_pipes;
             Vector<Process*> processes;
             bool first_schedule_init_done = false;
             bool first_schedule_complete = false;

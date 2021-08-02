@@ -48,9 +48,10 @@ namespace Kernel {
             }
         }
 
-        void SerialPrintf(char* str, ...) {
+        void SerialPrintf(const char* s, ...) {
+            char* str = (char*)s;
             va_list args;
-            va_start(args, str);
+            va_start(args, s);
             while(*str) {
                 if(*str == '%') {
                     switch(*++str) {

@@ -26,7 +26,7 @@ public:
         if(at >= _size) { return; }
 
         // Move all entries past at left
-        for(int i = at; i < (_size - 1); i++) {
+        for(size_t i = at; i < (_size - 1); i++) {
             array[i] = array[i + 1];
         }
         _size--;

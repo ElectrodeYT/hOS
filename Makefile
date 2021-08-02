@@ -1,8 +1,8 @@
 ARCH := x86_64
 
-C := $(ARCH)-elf-gcc
-CPP := $(ARCH)-elf-g++
-AS := $(ARCH)-elf-as
+C := $(ARCH)-hos-gcc
+CPP := $(ARCH)-hos-g++
+AS := $(ARCH)-hos-as
 
 C_ARGS := -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -O2 -Wall -Wextra -pedantic -g -Iarch/$(ARCH)/inc -Iagnostic/inc
 CPP_ARGS := -ffreestanding -O2 -Wall -Wextra -pedantic -fno-exceptions -fno-rtti -mno-mmx -mno-sse -mno-sse2 -mno-sse3 \
@@ -28,19 +28,19 @@ boot_image := arch/$(ARCH)/hKern.img
 objects := $(assembly_o) $(c_o) $(cpp_o)
 
 # Services we need to boot
-services := base/example/testa.bin base/example/testb.bin
+services := sysroot/testa.elf sysroot/testb.elf
 
-.PHONY: all create-image link qemu qemu-debug cloc
+.PHONY: all create-image compile-services link qemu qemu-debug cloc
 
-%.o: %.s $(services)
+%.o: %.s
 	@echo "[ASM]		" $< $@
 	@$(AS) $< -o $@ $(AS_ARGS)
 
-%.o: %.c $(services)
+%.o: %.c
 	@echo "[C]		" $< $@
 	@$(C) -c $< -o $@ $(C_ARGS)
 
-%.o: %.cpp $(services)
+%.o: %.cpp
 	@echo "[CPP]		" $< $@
 	@$(CPP) -c $< -o $@ $(CPP_ARGS)
 
@@ -69,4 +69,4 @@ clean:
 	@$(MAKE) -C base clean
 
 cloc:
-	@cloc arch/$(ARCH)/src arch/$(ARCH)/inc
+	@cloc arch/$(ARCH) agnostic base

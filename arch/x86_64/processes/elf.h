@@ -63,7 +63,7 @@ public:
         Section(void* d) : data(d) { }
 
         void copy_out(void* dst) {
-            memcopy((data + file_begin), dst, size);
+            memcopy((void*)((uint64_t)data + file_begin), dst, size);
         }
 
     private:
@@ -93,12 +93,12 @@ private:
     uint8_t file_padding_byte_start;
 
     
-    uint64_t read64(uint64_t offset) { return *((uint64_t*)(data + offset)); }
-    int64_t read64s(uint64_t offset) { return *((int64_t*)(data + offset)); }
-    uint32_t read32(uint64_t offset) { return *((uint32_t*)(data + offset)); }
-    int32_t read32s(uint64_t offset) { return *((int32_t*)(data + offset)); }
-    uint32_t read16(uint64_t offset) { return *((uint16_t*)(data + offset)); }
-    uint32_t read8(uint64_t offset) { return *((uint8_t*)(data + offset)); }
+    uint64_t read64(uint64_t offset) { return *((uint64_t*)((uint64_t)data + offset)); }
+    int64_t read64s(uint64_t offset) { return *((int64_t*)((uint64_t)data + offset)); }
+    uint32_t read32(uint64_t offset) { return *((uint32_t*)((uint64_t)data + offset)); }
+    int32_t read32s(uint64_t offset) { return *((int32_t*)((uint64_t)data + offset)); }
+    uint32_t read16(uint64_t offset) { return *((uint16_t*)((uint64_t)data + offset)); }
+    uint32_t read8(uint64_t offset) { return *((uint8_t*)((uint64_t)data + offset)); }
     
 
 

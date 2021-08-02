@@ -21,7 +21,7 @@ namespace Kernel {
             #define PHYSMEM_LL_TYPE_ACPI_REC 2      // Reclaimable with ACPI
             #define PHYSMEM_LL_TYPE_ACPI_NVS 3      // ACPI NVS
             #define PHYSMEM_LL_TYPE_BAD 4           // Existing, but bad memory
-            #define PHYSMEM_LL_TYPE_KERNEL 5        // Kernel location
+            #define PHYSMEM_LL_TYPE_KERNEL_MODULES 5        // Kernel location
             #define PHYSMEM_LL_TYPE_BOOTLOADER 6    // Bootloader data
             #define PHYSMEM_LL_TYPE_LOWMEM 7        // Low memory area
             uint8_t type;

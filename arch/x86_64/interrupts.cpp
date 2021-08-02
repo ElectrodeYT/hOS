@@ -5,6 +5,7 @@
 #include <debug/serial.h>
 #include <processes/syscalls/syscall.h>
 #include <processes/scheduler.h>
+#include <mem/PM/physalloc.h>
 
 // Interrupts from CPU (Page fault, GPF, ...)
 extern "C" void isr0 ();
@@ -77,6 +78,47 @@ namespace Kernel {
         // Determine which interrupt handler we need to call
         switch(registers->int_num) {
             case ExceptionID::PageFault: {
+                uint64_t faulting;
+                // Get the faulting address from cr2
+                asm volatile("movq %%cr2, %0" : "=r"(faulting));
+                
+                // This is above the debug print's to not clutter the debug serial during CoW
+                // If the page was present, and the error was a write error, then we should copy the page and simply return
+                if((registers->error & 0b111) == 0b111) {
+                    // Loop through the process's allocated pages and check if one matches the address where this happened
+                    VM::Manager::VMObject* found = NULL;
+                    Processes::Process* curr = Processes::Scheduler::the().CurrentProcess();
+                    uint64_t vm_object_page = 0;
+                    for(size_t i = 0; i < curr->mappings.size(); i++) {
+                        VM::Manager::VMObject* curr_map = curr->mappings.at(i);
+                        if((curr_map->base <= faulting) && ((curr_map->base + curr_map->size) >= faulting)) {
+                            found = curr_map;
+                            vm_object_page = ((faulting & ~(0xFFF)) - curr_map->base) / 4096;
+                            break;
+                        }
+                    }
+                    if(found && found->write) {
+                        // Debug::SerialPrintf("Performing copy on write for page %x\r\n", (faulting & ~(0xFFF)));
+                        found->decrementCopyOnWrite(vm_object_page);
+                        // If this is the last CoW, we just remap it as write
+                        if(found->checkCopyOnWrite(vm_object_page) == 0) {
+                            // Debug::SerialPrintf("This was the last reference to page %x, simply remapping as write\r\n", (faulting & ~(0xFFF)));
+                            VM::Manager::the().MapPage(VM::Manager::the().GetPhysical((faulting & ~(0xFFF))), (faulting & ~(0xFFF)), 0b111);
+                            return;
+                        }
+                        // We found a page, copy it
+                        uint64_t new_phys = PM::Manager::the().AllocatePages();
+                        // We temp map this new page to the 0 page, as it is otherwise guaranteed to never be mapped
+                        VM::Manager::the().MapPage(new_phys, 0, 0b11);
+                        // Now we can copy the faulting page to the new page
+                        memcopy((void*)(faulting & ~(0xFFF)), (void*)0, 0x1000);
+                        // We now replace the mapping and unmap the 0 page
+                        VM::Manager::the().MapPage(0, 0, 0);
+                        VM::Manager::the().MapPage(new_phys, (faulting & ~(0xFFF)), 0b111);
+                        return;
+                    }
+                }
+
                 Debug::SerialPrint("\r\n\r\n----------\r\nPAGE FAULT\n\rError: ");
 
                 // Decode error
@@ -102,9 +144,6 @@ namespace Kernel {
 
                 // Make new line and print the faulting address
                 Debug::SerialPrint("\n\r");
-                uint64_t faulting;
-                // Get the faulting address from cr2
-                asm volatile("movq %%cr2, %0" : "=r"(faulting));
                 Debug::SerialPrintf("Faulting address: %x\r\n", faulting);
                 Debug::SerialPrintf("Faulting RIP: %x\r\n", registers->rip);
                 // If we were in user mode, kill current process and recall scheduler
@@ -120,7 +159,7 @@ namespace Kernel {
                 Debug::Panic("Unrecoverable page fault");
             }
             case ExceptionID::GeneralProtectionFault: {
-                Debug::SerialPrint("\r\n\r\n------------------------GENERAL PROTECTION FAULT\n\r");
+                Debug::SerialPrint("\r\n\r\n------------------------\r\nGENERAL PROTECTION FAULT\n\r");
                 Debug::SerialPrintf("Error code: %i\r\nFaulting RIP: %x\r\n", (int)registers->error, (uint64_t)registers->rip);
                 if(registers->error) {
                     if(registers->error & 0b1) { Debug::SerialPrint("External "); }
@@ -133,7 +172,7 @@ namespace Kernel {
                     Debug::SerialPrintf("\r\nSelector index: %i\r\n", (registers->error & ~0b111) >> 3);
                 }
                 // Check the low bits of CS to see if we were in user mode
-                if(registers->cs & 0b11 == 0b11) {
+                if((registers->cs & 0b11) == 0b11) {
                     Debug::SerialPrint("Killing current process due to GPF\r\n");
                     Processes::Scheduler::the().KillCurrentProcess();
                     Processes::Scheduler::the().Schedule(registers);

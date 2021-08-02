@@ -25,6 +25,8 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     load_gdt();
     // We initialize the kernel internal heap as well, it is needed for initializing 
     __init_heap();
+    // Setup serial debug output
+    __init_serial();
 
     // Call the global constructors
     for (ctor_constructor* ctor = &start_ctors; ctor < &end_ctors; ctor++) {
@@ -33,9 +35,6 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
 
     // Get stivale memory map tag
     stivale2_struct_tag_memmap* memmap_tag = (stivale2_struct_tag_memmap*)stivale2_get_tag(stivale2_struct, STIVALE2_STRUCT_TAG_MEMMAP_ID);
-
-    // Save the entry which has the kernel in it
-    stivale2_mmap_entry* kernel_mapping = NULL;
 
     // Check that the memory map is availabe
     if(memmap_tag->entries == 0) { for(;;); } // No output is setup yet, just hang
@@ -55,7 +54,7 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
             case STIVALE2_MMAP_ACPI_NVS: entry_type = PHYSMEM_LL_TYPE_ACPI_NVS; break;
             case STIVALE2_MMAP_BAD_MEMORY: entry_type = PHYSMEM_LL_TYPE_BAD; break;
             case STIVALE2_MMAP_BOOTLOADER_RECLAIMABLE: entry_type = PHYSMEM_LL_TYPE_BOOTLOADER; break;
-            case STIVALE2_MMAP_KERNEL_AND_MODULES: entry_type = PHYSMEM_LL_TYPE_KERNEL; break;
+            case STIVALE2_MMAP_KERNEL_AND_MODULES: entry_type = PHYSMEM_LL_TYPE_KERNEL_MODULES; break;
             default: break; // Leave it with the error entry
         }
 
@@ -67,20 +66,12 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
         curr_phys_mem_ll->base = memmap_tag->memmap[i].base;
         curr_phys_mem_ll->type = entry_type;
         curr_phys_mem_ll->size = memmap_tag->memmap[i].length;
-        
+        curr_phys_mem_ll->next = NULL;
+
         // If this isnt the last one, allocate next one and change to it
         if(i != (memmap_tag->entries - 1)) {
             curr_phys_mem_ll->next = new Kernel::PM::physmem_ll;
             curr_phys_mem_ll = curr_phys_mem_ll->next;
-        }
-
-        // If this is the kernel mapping, save it
-        if(memmap_tag->memmap[i].type == STIVALE2_MMAP_KERNEL_AND_MODULES) {
-            if(kernel_mapping != NULL) {
-                Kernel::Debug::SerialPrint("early boot error: multiple kernel regions");
-                for(;;);
-            }
-            kernel_mapping = &(memmap_tag->memmap[i]);
         }
     }
 
@@ -91,28 +82,47 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     Kernel::VM::Manager::the().Init();
 
     // Map kernel
-    uint64_t kernel_phys_begin = (kernel_mapping->base & 0xFFFFFFFFFF000);
-    uint64_t kernel_phys_end = ((kernel_mapping->base + kernel_mapping->length) & 0xFFFFFFFFFF000);
+    curr_phys_mem_ll = physical_mem_ll;
+    while(curr_phys_mem_ll) {
+        if(curr_phys_mem_ll->type == PHYSMEM_LL_TYPE_KERNEL_MODULES) {
+            uint64_t kernel_phys_begin = (curr_phys_mem_ll->base & 0xFFFFFFFFFF000);
+            uint64_t kernel_phys_end = ((curr_phys_mem_ll->base + curr_phys_mem_ll->size) & 0xFFFFFFFFFF000);
 
-    uint64_t kernel_virt_begin = 0xffffffff80200000;
+            uint64_t kernel_virt_offset = 0xffffffff80000000;
 
-    // Some logic incase the kernel overflows the last page
-    if((kernel_mapping->base + kernel_mapping->length) & 0xFFF) { kernel_phys_end += 4 * 1024; }
+            // Some logic incase the kernel overflows the last page
+            if((curr_phys_mem_ll->base + curr_phys_mem_ll->size) & 0xFFF) { kernel_phys_end += 4 * 1024; }
 
-    for(uint64_t current_map = kernel_phys_begin; current_map < kernel_phys_end; current_map += 4 * 1024) {
-        Kernel::VM::Manager::the().MapPageEarly(current_map, kernel_virt_begin);
-        kernel_virt_begin += 4 * 1024;
+            for(uint64_t current_map = kernel_phys_begin; current_map < kernel_phys_end; current_map += 4 * 1024) {
+                Kernel::VM::Manager::the().MapPageEarly(current_map, kernel_phys_begin + kernel_virt_offset);
+                kernel_virt_offset += 4 * 1024;
+            }
+        }
+        curr_phys_mem_ll = curr_phys_mem_ll->next;
+    }
+
+
+    // Create the module pointer
+    struct stivale2_struct_tag_modules* module_struct = (stivale2_struct_tag_modules*)stivale2_get_tag(stivale2_struct, STIVALE2_STRUCT_TAG_MODULES_ID);
+    size_t module_count = module_struct->module_count;
+    uint8_t** module_pointers = new uint8_t*[module_count];
+    uint64_t* module_sizes = new uint64_t[module_count];
+    char** module_names = new char*[module_count];
+    for(size_t i = 0; i < module_count; i++) {
+        // These are phyiscal addresses, but since they are also a mapping in the stivale2 stuff, we can
+        // simply add the virtual base to them and they will work
+        module_pointers[i] = (uint8_t*)(module_struct->modules[i].begin + 0xffffffff80000000);
+        module_sizes[i] = module_struct->modules[i].end - module_struct->modules[i].begin;
+        module_names[i] = (char*)((uint64_t)module_struct->modules[i].string + 0xffffffff80000000);
     }
 
     // We can now switch to the new page table
     Kernel::VM::Manager::the().SwitchPageTables();
 
 
-    // We are in a much safer place now; dereferencing null pointers will for example now crash, before it would have been identity mapped to physical memory.
-    // We can also setup simple debug output, and use the panic function (errors previously would have simply crashed the system)
 
-    // Setup serial debug output
-    __init_serial();
+    // We are in a much safer place now; dereferencing null pointers will for example now crash, before it would have been identity mapped to physical memory.
+
 
     // Initialize TSS
     load_tss();
@@ -121,5 +131,5 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     Kernel::Interrupts::the().InitInterrupts();
 
     // Basic init has occured, we can call the main now
-    Kernel::KernelMain();
+    Kernel::KernelMain(module_count, module_pointers, module_sizes, module_names);
 }

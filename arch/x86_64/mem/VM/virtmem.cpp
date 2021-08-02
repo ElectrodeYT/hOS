@@ -92,6 +92,7 @@ namespace Kernel {
         uint64_t Manager::CurrentPageTable() {
             uint64_t ret;
             asm volatile("mov %%cr3, %0" : "=r"(ret));
+            return ret;
         }
 
         void* Manager::AllocatePages(size_t count, unsigned long options, bool shared) {
@@ -133,7 +134,27 @@ namespace Kernel {
 
         // TODO
         void Manager::FreePages(void* adr) {
-            (void)adr;
+            // Check if this is a user or kernel address
+            if((uint64_t)adr & (1UL << 63)) {
+                // Is a kernel address
+                for(size_t i = 0; i < mem.size(); i++) {
+                    VMObject* curr = mem.at(i);
+                    if(curr->isAllocated() && curr->base == (uint64_t)adr) {
+                        VMObject* new_unalloc = new VMObject(false, false);
+                        new_unalloc->base = curr->base;
+                        new_unalloc->size = curr->size;
+                        // Debug::SerialPrintf("Deallocating kernel pages %x, size %x\r\n", curr->base, curr->size);
+                        delete curr;
+                        mem.remove(i);
+                        mem.push_back(new_unalloc);
+                        // TODO: merge
+                        return;
+                    }
+                }
+            } else {
+                // Is a user address
+                return;
+            }
         }
 
 
@@ -184,6 +205,7 @@ namespace Kernel {
                 memset((void*)((uint64_t)CalculateRecursiveLevel1(lvl2, lvl3, lvl4)), 0x00, 4096);
             }
             uint64_t* lvl1_table = CalculateRecursiveLevel1(lvl2, lvl3, lvl4);
+            if(!(options & 1)) { lvl1_table[lvl1] = 0; return; } // If the present bit is not set, then just set to null
             // Set the entry
             ASSERT(phys & 8000000000000000, "Physical address would set NX bit!");
             lvl1_table[lvl1] = (phys & 0xFFFFFFFFFF000) | options;

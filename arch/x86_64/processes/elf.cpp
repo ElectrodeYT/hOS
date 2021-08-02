@@ -24,7 +24,7 @@ bool ELF::readHeader() {
     file_abi_version = read8(8);
     file_padding_byte_start = read8(9);
 
-    Kernel::Debug::SerialPrintf("Read ELF header, %s endian, %s ABI\r\n", endianness ? "Big" : "Little", getABI());
+    // Kernel::Debug::SerialPrintf("Read ELF header, %s endian, %s ABI\r\n", endianness ? "Big" : "Little", getABI());
 
     if(endianness) { Kernel::Debug::SerialPrintf("TODO: support big endian elf files\r\n"); return false; }
 
@@ -43,7 +43,7 @@ bool ELF::readHeader() {
     file_section_header_count = read16(curr_pointer); curr_pointer += 2;
     file_section_name_string_table_index = read16(curr_pointer); curr_pointer += 2;
 
-    Kernel::Debug::SerialPrint("Object file type: ");
+    /*Kernel::Debug::SerialPrint("Object file type: ");
     switch(file_object_type) {
         case ET_NONE: Kernel::Debug::SerialPrint("ET_NONE\r\n"); break;
         case ET_REL: Kernel::Debug::SerialPrint("ET_REL\r\n"); break;
@@ -51,8 +51,8 @@ bool ELF::readHeader() {
         case ET_DYN: Kernel::Debug::SerialPrint("ET_DYN\r\n"); break;
         case ET_CORE: Kernel::Debug::SerialPrint("ET_CORE\r\n"); break;
     }
-
-    Kernel::Debug::SerialPrintf("Header size: %x\r\nEntry point: %x\r\nProgram header offset: %x\r\nSection header offset: %x\r\n", file_header_size, file_entry, file_program_header_offset, file_section_header_offset);
+*/
+    // Kernel::Debug::SerialPrintf("Header size: %x\r\nEntry point: %x\r\nProgram header offset: %x\r\nSection header offset: %x\r\n", file_header_size, file_entry, file_program_header_offset, file_section_header_offset);
 
     // We now need to read the program header tables
     curr_pointer = file_program_header_offset;
@@ -77,8 +77,8 @@ bool ELF::readHeader() {
         new_section->execute = flags & 0b1;
         new_section->loadable = type == 1;
         sections.push_back(new_section);
-        Kernel::Debug::SerialPrintf("Segment %i: vaddr %x, file size %x, segment size %x, type %i\r\n", i, vaddr, size_in_file, size_in_memory, type);
-        Kernel::Debug::SerialPrintf("Offset in file: %x\r\n", offset_in_file);
+        // Kernel::Debug::SerialPrintf("Segment %i: vaddr %x, file size %x, segment size %x, type %i\r\n", i, vaddr, size_in_file, size_in_memory, type);
+        // Kernel::Debug::SerialPrintf("Offset in file: %x\r\n", offset_in_file);
     }
 
 

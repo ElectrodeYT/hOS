@@ -6,8 +6,14 @@
 	],
 	"settings": {
 		"files.associations": {
+			"*.s": "gas",
 			"functional": "cpp",
-			"stddef.h": "c"
+			"stddef.h": "c",
+			"stdio.h": "c",
+			"*.inc": "cpp",
+			"string_view": "cpp",
+			"rope": "cpp",
+			"regex": "cpp"
 		}
 	}
 }
