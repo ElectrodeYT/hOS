@@ -30,7 +30,7 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
             char* str = new char[regs->rcx + 1];
             if(!this_proc->attemptCopyFromUser(regs->rbx, regs->rcx, str)) {
                 delete str;
-                regs->rax = ~1;
+                regs->rax = -EINVAL;
                 break;
             }
             // memcopy((void*)regs->rbx, str, regs->rcx);
@@ -42,7 +42,7 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
         // mmap
         case 2: {
             uint64_t actual;
-            regs->rax = mmap(this_proc, regs->rbx, &actual);
+            regs->rax = mmap(this_proc, regs->rbx, &actual, regs->rcx, regs->rdx);
             if(regs->rax & (1UL << 63)) { regs->rbx = actual; }
             break;
         }
@@ -73,6 +73,11 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
             regs->rax = (uint64_t)Processes::Scheduler::the().IPCHint(regs->rbx, regs->rcx, regs->rdx);
             break;
         }
+        // ipcsendpid
+        case 7: {
+            Debug::SerialPrintf("ipcsendpid: TODO\r\n");
+            regs->rax = -EINVAL;
+        }
         // ipcsendpipe
         case 8: {
            //  Debug::SerialPrintf("ipcsendpipe: pid %i, buffer at %x, size %x, string at %x, string len %i\r\n", this_proc->pid, regs->rbx, regs->rcx, regs->rdx, regs->rdi);
@@ -89,15 +94,19 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
     }
 }
 
-uint64_t SyscallHandler::mmap(Processes::Process* processes, uint64_t requested_size, uint64_t* actual_size) {
+uint64_t SyscallHandler::mmap(Processes::Process* processes, uint64_t requested_size, uint64_t* actual_size, uint64_t requested_pointer, uint64_t flags) {
     uint64_t size = round_to_page_up(requested_size);
-    // Find the lowest starting from 0x400000 place to map this
     uint64_t current_map = 0x400000;
+    uint64_t req_pointer_page = requested_pointer & ~(0xFFF);
+    if(req_pointer_page) { current_map = req_pointer_page; } // If a pointer was requested, then we force current_map to the page that was requested
+
+    // Find the lowest starting from 0x400000 place to map this
     for(size_t i = 0; i < processes->mappings.size(); i++) {
         // Check if this mapping would overlap with the current map
         // Check low end
         VM::Manager::VMObject* obj = processes->mappings.at(i);
         if((MAX((obj->base + obj->size), (current_map + size)) - MIN(obj->base, current_map)) < ((obj->base + obj->size) - obj->base) + ((current_map + size) - current_map)) {
+            if(req_pointer_page) { return -EINVAL; } // Check if this address works
             current_map = obj->base + obj->size;
         }
     }
@@ -108,12 +117,14 @@ uint64_t SyscallHandler::mmap(Processes::Process* processes, uint64_t requested_
     // Actually map the pages
     for(uint64_t curr = 0; curr < size; curr += 4096) {
         uint64_t phys = PM::Manager::the().AllocatePages(1);
-        if(!phys) { return ~EINVAL; }
-        VM::Manager::the().MapPage(phys, current_map + curr, 0b111);
+        if(!phys) { return -EINVAL; }
+        VM::Manager::the().MapPage(phys, current_map + curr, flags ? 0b111 : 0b101);
     }
+    new_obj->write = flags != 0;
+    new_obj->read = true;
+    new_obj->execute = true; // lol
     processes->mappings.push_back(new_obj);
     if(actual_size) { *actual_size = size; }
-    // Debug::SerialPrintf("mmap syscall: requested %i, allocated %i, address %x\r\n", requested_size, size, current_map);
     return current_map;
 }
 

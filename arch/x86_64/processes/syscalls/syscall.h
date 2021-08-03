@@ -27,7 +27,7 @@ public:
     void HandleSyscall(Interrupts::ISRRegisters* regs);
 
     // Syscall implementations
-    uint64_t mmap(Processes::Process* processes, uint64_t requested_size, uint64_t* actual_size);
+    uint64_t mmap(Processes::Process* processes, uint64_t requested_size, uint64_t* actual_size, uint64_t requested_pointer = 0, uint64_t flags = 1);
     uint64_t munmap(Processes::Process* process);
 
     // These must be called from a interrupt context
