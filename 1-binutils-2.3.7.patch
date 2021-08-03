@@ -1,0 +1,61 @@
+diff --git a/binutils-2.37/bfd/config.bfd b/binutils-patched-2.37/bfd/config.bfd
+index 30087e3..911f4c7 100644
+--- a/binutils-2.37/bfd/config.bfd
++++ b/binutils-patched-2.37/bfd/config.bfd
+@@ -694,6 +694,11 @@ case "${targ}" in
+     targ_selvecs=i386_elf32_vec
+     want64=true
+     ;;
++  x86_64-*-hos*)
++    targ_defvec=x86_64_elf64_vec
++    targ_selvecs=i386_elf32_vec
++    want64=true
++    ;;
+ #endif
+   i[3-7]86-*-lynxos*)
+     targ_defvec=i386_elf32_vec
+diff --git a/binutils-2.37/config.sub b/binutils-patched-2.37/config.sub
+index 7384e91..7bdba64 100755
+--- a/binutils-2.37/config.sub
++++ b/binutils-patched-2.37/config.sub
+@@ -1729,7 +1729,7 @@ case $os in
+ 	     | skyos* | haiku* | rdos* | toppers* | drops* | es* \
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+ 	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
+-	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx*)
++	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | hos*)
+ 		;;
+ 	# This one is extra strict with allowed versions
+ 	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
+diff --git a/binutils-2.37/gas/configure.tgt b/binutils-patched-2.37/gas/configure.tgt
+index 338892a..96b0736 100644
+--- a/binutils-2.37/gas/configure.tgt
++++ b/binutils-patched-2.37/gas/configure.tgt
+@@ -235,6 +235,7 @@ case ${generic_target} in
+     esac ;;
+   i386-*-lynxos*)			fmt=elf em=lynx ;;
+   i386-*-redox*)			fmt=elf ;;
++  i386-*-hos*)                          fmt=elf ;;
+   i386-*-solaris*)			fmt=elf em=solaris ;;
+   i386-*-freebsd* \
+   | i386-*-kfreebsd*-gnu)		fmt=elf em=freebsd ;;
+diff --git a/binutils-2.37/ld/configure.tgt b/binutils-patched-2.37/ld/configure.tgt
+index 6205d7c..23e1834 100644
+--- a/binutils-2.37/ld/configure.tgt
++++ b/binutils-patched-2.37/ld/configure.tgt
+@@ -945,6 +945,8 @@ x86_64-*-linux-*)	targ_emul=elf_x86_64
+ x86_64-*-redox*)	targ_emul=elf_x86_64
+ 			targ_extra_emuls=elf_i386
+ 			;;
++x86_64-*-hos*)          targ_emul=elf_x86_64
++                        ;;
+ x86_64-*-solaris2*)	targ_emul=elf_x86_64_sol2
+ 			targ_extra_emuls="elf_x86_64 elf_i386_sol2 elf_i386_ldso elf_i386 elf_iamcu elf_l1om elf_k1om"
+ 			targ_extra_libpath=$targ_extra_emuls
+diff --git a/binutils-patched-2.37/ld/emulparams/elf_x86_64_hos.sh b/binutils-patched-2.37/ld/emulparams/elf_x86_64_hos.sh
+new file mode 100644
+index 0000000..c727944
+--- /dev/null
++++ b/binutils-patched-2.37/ld/emulparams/elf_x86_64_hos.sh
+@@ -0,0 +1 @@
++. $(srcdir)/emulparams/elf_x86_64.sh
