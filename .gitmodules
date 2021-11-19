@@ -1,0 +1,3 @@
+[submodule "base/mlibc"]
+	path = base/mlibc
+	url = https://github.com/electrodeyt/mlibc
