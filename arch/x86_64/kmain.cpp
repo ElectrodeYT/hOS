@@ -5,6 +5,7 @@
 #include <timer.h>
 #include <mem/VM/virtmem.h>
 #include <processes/scheduler.h>
+#include <kernel-drivers/PCI.h>
 namespace Kernel {
     void KernelMain(size_t mod_count, uint8_t** modules, uint64_t* module_sizes, char** module_names) {
         ASSERT(mod_count > 0, "No bootstrap elf loaded as module");
@@ -17,6 +18,9 @@ namespace Kernel {
 
         // Initialize scheduler
         Processes::Scheduler::the().Init();
+
+        // Probe PCI devices
+        PCI::the().probe();
 
         // Spawn bootstrap processes
         for(size_t i = 0; i < mod_count; i++) {
