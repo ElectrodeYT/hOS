@@ -36,7 +36,7 @@ diff --git a/gcc-patched-11.2.0/gcc/config/hos.h b/gcc-patched-11.2.0/gcc/config
 new file mode 100644
 index 0000000..ccbfb10
 --- /dev/null
-+++ b/gcc-patched-11.2.0/gcc/config/hos.h
++++ b/gcc-11.2.0/gcc/config/hos.h
 @@ -0,0 +1,27 @@
 +#undef TARGET_HOS
 +#define TARGET_HOS 1

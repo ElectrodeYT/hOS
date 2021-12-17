@@ -56,6 +56,6 @@ diff --git a/binutils-patched-2.37/ld/emulparams/elf_x86_64_hos.sh b/binutils-pa
 new file mode 100644
 index 0000000..c727944
 --- /dev/null
-+++ b/binutils-patched-2.37/ld/emulparams/elf_x86_64_hos.sh
++++ b/binutils-2.37/ld/emulparams/elf_x86_64_hos.sh
 @@ -0,0 +1 @@
 +. $(srcdir)/emulparams/elf_x86_64.sh
