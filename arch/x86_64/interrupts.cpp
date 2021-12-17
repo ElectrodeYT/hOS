@@ -181,6 +181,11 @@ namespace Kernel {
                 }
                 Kernel::Debug::Panic("General protection fault");
             }
+            case ExceptionID::InvalidOpcode: {
+                Debug::SerialPrint("\r\n\r\n------------------------\r\nINVALID OPCODE\n\r");
+                Debug::SerialPrintf("Error code: %i\r\nFaulting RIP: %x\r\n", (int)registers->error, (uint64_t)registers->rip);
+                Kernel::Debug::Panic("Invalid opcode");
+            }
             // Syscalls
             case 0x80: {
                 SyscallHandler::the().HandleSyscall(registers);
