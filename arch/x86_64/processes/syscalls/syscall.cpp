@@ -15,11 +15,7 @@ void SyscallHandler::Init() {
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
-// syscalls:
-// 1: debugWrite
-// 2: mmap
-// 3: munmap (TODO)
-// 4: exit
+// Syscalls are in syscalls.ods
 
 void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
     asm volatile("sti");
@@ -49,6 +45,7 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
         // munmap
         case 3: {
             Debug::SerialPrintf("TODO: munmap\r\n");
+            regs->rax = -ENOSYS;
             break;
         }
         // exit
@@ -76,7 +73,8 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
         // ipcsendpid
         case 7: {
             Debug::SerialPrintf("ipcsendpid: TODO\r\n");
-            regs->rax = -EINVAL;
+            regs->rax = -ENOSYS;
+            break;
         }
         // ipcsendpipe
         case 8: {
@@ -90,7 +88,13 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
             regs->rax = (uint64_t)Processes::Scheduler::the().IPCRecv(regs->rbx, regs->rcx, regs->rdx, regs);
             break;
         }
-        default: Debug::SerialPrintf("Got invalid syscall: %x\r\n", (uint64_t)regs->rax); regs->rax = 0; break;
+        // iohint
+        case 10: {
+            Debug::SerialPrintf("iohint: TODO\r\n");
+            regs->rax = -ENOSYS;
+            break;
+        }
+        default: Debug::SerialPrintf("Got invalid syscall: %x\r\n", (uint64_t)regs->rax); regs->rax = -ENOSYS; break;
     }
 }
 

@@ -77,8 +77,8 @@ bool ELF::readHeader() {
         new_section->execute = flags & 0b1;
         new_section->loadable = type == 1;
         sections.push_back(new_section);
-        // Kernel::Debug::SerialPrintf("Segment %i: vaddr %x, file size %x, segment size %x, type %i\r\n", i, vaddr, size_in_file, size_in_memory, type);
-        // Kernel::Debug::SerialPrintf("Offset in file: %x\r\n", offset_in_file);
+        Kernel::Debug::SerialPrintf("Segment %i: vaddr %x, file size %x, segment size %x, type %i\r\n", i, vaddr, size_in_file, size_in_memory, type);
+        Kernel::Debug::SerialPrintf("Offset in file: %x\r\n", offset_in_file);
     }
 
 

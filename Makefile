@@ -69,4 +69,4 @@ clean:
 	@$(MAKE) -C base clean
 
 cloc:
-	@cloc arch/$(ARCH) agnostic base
+	@cloc arch/$(ARCH) agnostic base/example base/tiny-libc # ignore mlibc

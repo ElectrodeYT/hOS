@@ -84,7 +84,7 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     // Map kernel
     curr_phys_mem_ll = physical_mem_ll;
     while(curr_phys_mem_ll) {
-        if(curr_phys_mem_ll->type == PHYSMEM_LL_TYPE_KERNEL_MODULES) {
+        if(curr_phys_mem_ll->type == PHYSMEM_LL_TYPE_KERNEL_MODULES || curr_phys_mem_ll->type == PHYSMEM_LL_TYPE_BOOTLOADER) {
             uint64_t kernel_phys_begin = (curr_phys_mem_ll->base & 0xFFFFFFFFFF000);
             uint64_t kernel_phys_end = ((curr_phys_mem_ll->base + curr_phys_mem_ll->size) & 0xFFFFFFFFFF000);
 

@@ -1,0 +1,11 @@
+[host_machine]
+system = 'hos'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'
+
+[binaries]
+c = '/home/alexander/opt/cross-hos/bin/x86_64-hos-gcc'
+cpp = '/home/alexander/opt/cross-hos/bin/x86_64-hos-g++'
+ar = '/home/alexander/opt/cross-hos/bin/x86_64-hos-ar'
+strip = '/home/alexander/opt/cross-hos/bin/x86_64-hos-strip'

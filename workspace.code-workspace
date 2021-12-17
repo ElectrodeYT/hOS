@@ -13,7 +13,8 @@
 			"*.inc": "cpp",
 			"string_view": "cpp",
 			"rope": "cpp",
-			"regex": "cpp"
+			"regex": "cpp",
+			"cstdint": "cpp"
 		}
 	}
 }

@@ -4,6 +4,7 @@ SYSROOT := ../../sysroot
 AS := $(ARCH)-hos-as
 LD := $(ARCH)-hos-ld
 C := $(ARCH)-hos-gcc
+STRIP := $(ARCH)-hos-strip
 CARGS := -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -O2 -Wall -Wextra -g  -I$(SYSROOT)/usr/include
 OBJCPY := $(ARCH)-elf-objcopy
 sources := testa.c testb.c
@@ -19,6 +20,7 @@ objects_sysroot := $(addprefix $(SYSROOT)/, $(objects))
 	@echo "[BASE-C]		" $< $@
 	@$(C) -c $< -o $@.o $(CARGS) -I../tiny-libc/inc
 	@$(C) -O2 $@.o -o $@ -static -lgcc
+	@#$(STRIP) $@
 
 $(SYSROOT)/%.elf: %.elf
 	@cp $< $@

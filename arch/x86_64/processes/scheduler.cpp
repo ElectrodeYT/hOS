@@ -29,7 +29,7 @@ namespace Kernel {
                 argv_size += strlen(argv[i]) + 1;
                 argv_size += 8; // Pointer
             }
-            if(argv_size > 0x1000) { return -EINVSZ; }
+            if(argv_size > 0x1000) { return -E2BIG; }
             // Calculate envp size
             size_t envp_size = 0;
             for(size_t i = 0; i < (size_t)envc; i++) {
@@ -39,7 +39,7 @@ namespace Kernel {
                 envp_size += 8;
             } 
             envp_size += 8; // Terminator pointer
-            if(envp_size > 0x1000) { return -EINVSZ; }
+            if(envp_size > 0x1000) { return -E2BIG; }
 
             ELF elf(data, length);
             if(!elf.readHeader()) {
@@ -94,7 +94,7 @@ namespace Kernel {
             }
 
             // Create main stack
-            const uint64_t stack_size = 0x4000;
+            const uint64_t stack_size = 0x8000;
             uint64_t stack_base = SyscallHandler::the().mmap(new_proc, stack_size, NULL);
 
             // Copy argv
@@ -150,8 +150,8 @@ namespace Kernel {
             main_thread->regs.rsp = stack_base + stack_size; // -16 for the two pointers on the stack
             main_thread->regs.rdi = argc;
             main_thread->regs.rsi = argv_base;
-            main_thread->regs.rdx = envc;
-            main_thread->regs.rcx = envp_base;
+            main_thread->regs.rdx = envp_base;
+            main_thread->regs.rcx = envc;
             
             // Create syscall thread stack
             // TODO: guard pages
@@ -291,8 +291,7 @@ namespace Kernel {
             // Make sure PID 0 is scheduled first
             if(!first_schedule_complete) { curr_proc = 0; curr_thread = 0; first_schedule_complete = true; }
             
-            // Return if no process exists
-            if(processes.size() == 0) { curr_proc = 0; curr_thread = 0; return; }
+            ASSERT(processes.size(), "No processes");
 
             // Check if we have overflowed the available processes
             if(curr_proc >= processes.size()) { curr_proc = 0; curr_thread = 0; }
@@ -313,7 +312,7 @@ namespace Kernel {
                 size_t msg_size = proc->nextMessageSize();
                 if(msg_size > thread->regs.rcx) {
                     // This message is bigger than the buffer, set error and unblock
-                    thread->regs.rax = -EINVSZ;
+                    thread->regs.rax = -E2BIG;
                     thread->blocked = Thread::BlockState::Running;
                 } else {
                     // We can copy this message to the process
@@ -413,7 +412,7 @@ namespace Kernel {
                 }
             } else {
                 // No IPC message may be bigger than 16k (0x4000)
-                if(msg_len > 0x4000) { return -EINVSZ; }
+                if(msg_len > 0x4000) { return -E2BIG; }
                 proc->buffer = new uint64_t[msg_len / 8];
                 proc->buffer_size = msg_len;
                 proc->accepts_ipc = true;
@@ -421,7 +420,7 @@ namespace Kernel {
 
             if(pipe_name_string) {
                 // Pipe string must be smaller than 511 chars
-                if(pipe_name_string_len < 0 || pipe_name_string_len > 511) { return -EINVSZ; }
+                if(pipe_name_string_len < 0 || pipe_name_string_len > 511) { return -E2BIG; }
                 char* string = new char[pipe_name_string_len + 1];
                 if(!proc->attemptCopyFromUser(pipe_name_string, pipe_name_string_len, string)) { return -EINVAL; }
                 string[pipe_name_string_len] = '\0';
@@ -442,7 +441,7 @@ namespace Kernel {
             if(proc->msg_count) {
                 // There is a message waiting, then we can just copy it (providing the size works out);
                 uint64_t msg_size = proc->nextMessageSize();
-                if(msg_size > (uint64_t)buffer_len) { return -EINVSZ; }
+                if(msg_size > (uint64_t)buffer_len) { return -E2BIG; }
                 if(!proc->attemptCopyToUser(buffer, msg_size, proc->buffer)) { return -EINVAL; }
                 memcopy((void*)((uint64_t)(proc->buffer) + msg_size), proc->buffer, proc->buffer_size - msg_size);
                 proc->msg_count--;
@@ -473,7 +472,7 @@ namespace Kernel {
             if(!destination_proc->accepts_ipc) { return -EPERM; }
             
             // Check if the buffer size allows it
-            if((uint64_t)buffer_len > (destination_proc->buffer_size - destination_proc->currentBufferOffset())) { return -EINVSZ; }
+            if((uint64_t)buffer_len > (destination_proc->buffer_size - destination_proc->currentBufferOffset())) { return -E2BIG; }
             // Set pid and size
             volatile uint64_t* buffer_as_long = (volatile uint64_t*)((uint64_t)destination_proc->buffer + destination_proc->currentBufferOffset());
             buffer_as_long[0] = proc->pid;

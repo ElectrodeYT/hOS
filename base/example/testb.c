@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <ipc.h>
+#include <hos/ipc.h>
 #include <string.h>
 
 const char* ipc_msg = "Hello IPC World!";

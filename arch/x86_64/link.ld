@@ -41,7 +41,7 @@ SECTIONS
         KEEP(*(.testa*))
     }
 
-    .heap : {
+    .heap (NOLOAD) : {
         KEEP(*(.heap*))
     }
 }
