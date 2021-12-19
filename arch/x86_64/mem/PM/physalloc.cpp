@@ -6,6 +6,7 @@
 namespace Kernel {
     namespace PM {
         void Manager::Init(physmem_ll* memmap) {
+            memory_map = memmap;
             // Traverse the list
             physmem_ll* curr = memmap;
             while(curr != NULL) {
@@ -56,6 +57,20 @@ namespace Kernel {
                 }
             }
             Debug::Panic("PM::Manager: no memory left!");
+        }
+
+        bool Manager::CheckIOSpace(uint64_t phys, uint64_t size) {
+            // TODO: is the physmem mutex needed here?
+            // Iterate through all physical memory mapping
+            uint64_t phys_high = phys + size;
+            physmem_ll* curr = memory_map;
+            while(curr != NULL) {
+                if(curr->type == PHYSMEM_LL_TYPE_USEABLE) {
+                    uint64_t mapping_high = curr->base + curr->size;
+                    if((phys < mapping_high) && (phys_high > curr->base)) { return false; }
+                }
+            }
+            return true;
         }
 
         void Manager::FreePages(uint64_t object) {

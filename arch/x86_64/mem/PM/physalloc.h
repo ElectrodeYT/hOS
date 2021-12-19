@@ -50,6 +50,9 @@ namespace Kernel {
             void Init(physmem_ll* memorymap);
             uint64_t AllocatePages(int count = 1);
             void FreePages(uint64_t pm);
+            // Check if the memory space passed is a IO area.
+            // Basically this returns false if this is a ram region
+            bool CheckIOSpace(uint64_t phys, uint64_t size);
 
             static Manager& the() {
                 static Manager instance;
@@ -59,6 +62,7 @@ namespace Kernel {
             mutex_t mutex;
 
             Vector<PMObject*> physicalmemory;
+            physmem_ll* memory_map;
         };
     }
 }
