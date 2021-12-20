@@ -7,6 +7,7 @@ image := hOS.img
 
 # Stuff to import into image
 limine_config := ../../sysroot/boot/limine.cfg
+limine_sys := /usr/share/limine/limine.sys
 libc := ../../sysroot/usr/lib/libtiny-libc.a
 
 .PHONY: create-image qemu
@@ -23,7 +24,7 @@ create-image $(image): $(kernel)
 	@echfs-utils -g -p0 $(image) mkdir usr/lib
 	@echfs-utils -g -p0 $(image) import $(kernel) kernel.elf
 	@echfs-utils -g -p0 $(image) import $(limine_config) limine.cfg
-	@echfs-utils -g -p0 $(image) import $(limine_config) limine.cfg
+	@echfs-utils -g -p0 $(image) import $(limine_sys) limine.sys
 	@echfs-utils -g -p0 $(image) import $(libc) usr/lib/libtiny-libc.a
 	@echfs-utils -g -p0 $(image) import ../../sysroot/testa.elf testa.elf
 	@echfs-utils -g -p0 $(image) import ../../sysroot/testb.elf testb.elf

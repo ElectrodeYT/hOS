@@ -4,6 +4,9 @@ C := $(ARCH)-hos-gcc
 CPP := $(ARCH)-hos-g++
 AS := $(ARCH)-hos-as
 
+# Cheat argument to run ./check-path.sh
+CHEAT_ARG := $(shell bash ./check-path.sh)
+
 C_ARGS := -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -O2 -Wall -Wextra -pedantic -g -Iarch/$(ARCH)/inc -Iagnostic/inc
 CPP_ARGS := -ffreestanding -O2 -Wall -Wextra -pedantic -fno-exceptions -fno-rtti -mno-mmx -mno-sse -mno-sse2 -mno-sse3 \
 			-mno-3dnow -mgeneral-regs-only -mno-red-zone -fno-stack-protector -fPIC -g -std=c++2a \
@@ -32,15 +35,16 @@ services := sysroot/testa.elf sysroot/testb.elf
 
 .PHONY: all create-image compile-services link qemu qemu-debug cloc
 
-%.o: %.s
+
+%.o: %.s 
 	@echo "[ASM]		" $< $@
 	@$(AS) $< -o $@ $(AS_ARGS)
 
-%.o: %.c
+%.o: %.c 
 	@echo "[C]		" $< $@
 	@$(C) -c $< -o $@ $(C_ARGS)
 
-%.o: %.cpp
+%.o: %.cpp 
 	@echo "[CPP]		" $< $@
 	@$(CPP) -c $< -o $@ $(CPP_ARGS)
 
@@ -52,15 +56,15 @@ link $(kernel): $(objects)
 create-image $(boot_image): $(kernel)
 	@$(MAKE) -C arch/$(ARCH) create-image
 
-compile-services $(services):
+compile-services $(services): 
 	@$(MAKE) -C base all ARCH=$(ARCH)
 
 all: $(boot_image) $(services)
 
-qemu: $(boot_image)
+qemu: $(boot_image) $(services)
 	@$(MAKE) -C arch/$(ARCH) qemu
 
-qemu-debug: $(boot_image)
+qemu-debug: $(boot_image) $(services)
 	@$(MAKE) -C arch/$(ARCH) qemu-debug
 
 clean:
