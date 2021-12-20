@@ -24,12 +24,12 @@ namespace Kernel {
         uint64_t Manager::AllocatePages(int count) {
             // Acquire physical memory mutex
             acquire(&mutex);
+            size_t byte_count = count * 4096;
             // Look through the vector to find unallocated pages
             for(size_t i = 0; i < physicalmemory.size(); i++) {
                 PMObject* curr = physicalmemory.at(i);
                 if(curr->allocated == false) {
                     // This is an unallocated page, check if its big enough
-                    size_t byte_count = count * 4096;
                     if(curr->size == byte_count) {
                         // We got the exact size, change it to allocated and return its base
                         curr->allocated = true;
