@@ -2,3 +2,12 @@
 *.elf
 *.img
 cross
+compiler/build-gcc
+compiler/build-binutils
+compiler/gcc-11.2.0.tar.xz
+compiler/gcc-11.2.0
+compiler/binutils-2.37.tar.xz
+compiler/binutils-2.37
+compiler/opt
+sysroot/usr
+base/prefix-cross.txt
