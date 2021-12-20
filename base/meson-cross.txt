@@ -5,7 +5,7 @@ cpu = 'x86_64'
 endian = 'little'
 
 [binaries]
-c = '/home/alexander/opt/cross-hos/bin/x86_64-hos-gcc'
-cpp = '/home/alexander/opt/cross-hos/bin/x86_64-hos-g++'
-ar = '/home/alexander/opt/cross-hos/bin/x86_64-hos-ar'
-strip = '/home/alexander/opt/cross-hos/bin/x86_64-hos-strip'
+c = prefix + 'x86_64-hos-gcc'
+cpp = prefix + 'x86_64-hos-g++'
+ar = prefix + 'x86_64-hos-ar'
+strip = prefix + 'x86_64-hos-strip'
