@@ -46,9 +46,10 @@ namespace Kernel {
     
     void PCI::probeDeviceFunction(uint8_t bus, uint8_t slot, uint8_t function) {
         if(deviceVendor(bus, slot, function) == 0xFFFF) { return; } // Doesnt exist
-        uint8_t device_class = configRead(bus, slot, function, 0xA);
-        uint8_t device_subclass = configRead(bus, slot, function, 0xB);
-        Debug::SerialPrintf("%i:%i.%i: %s; %s\n\r", (unsigned int)bus, (unsigned int)slot, (unsigned int)function, classToString(device_class), subclassToString(device_class, device_subclass));
+        uint8_t device_class = deviceClass(bus, slot, function);
+        uint8_t device_subclass = deviceClass(bus, slot, function);
+        Debug::SerialPrintf("%i:%i.%i: Class %i (%x), %s; subclass %i (%x), %s\n\r", (unsigned int)bus, (unsigned int)slot, (unsigned int)function, device_class, device_class, classToString(device_class), device_subclass, device_subclass, subclassToString(device_class, device_subclass));
+        Debug::SerialPrintf("\tDevice Vendor: %x, Device ID: %x\n\r", deviceVendor(bus, slot, function), deviceID(bus, slot, function));
     }
 
     const char* PCI::classToString(uint8_t c) {
