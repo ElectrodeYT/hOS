@@ -207,7 +207,7 @@ namespace Kernel {
             uint64_t* lvl1_table = CalculateRecursiveLevel1(lvl2, lvl3, lvl4);
             if(!(options & 1)) { lvl1_table[lvl1] = 0; return; } // If the present bit is not set, then just set to null
             // Set the entry
-            ASSERT(phys & 8000000000000000, "Physical address would set NX bit!");
+            ASSERT((phys & 0x8000000000000000) == 0, "Physical address would set NX bit!");
             lvl1_table[lvl1] = (phys & 0xFFFFFFFFFF000) | options;
             InvalidatePage((virt & 0xFFFFFFFFFF000));
             // release(&mutex);
