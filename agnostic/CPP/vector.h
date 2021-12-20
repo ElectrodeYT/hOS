@@ -57,9 +57,11 @@ public:
         if(at > _size) { return; }
         // Check capacity
         if(_size == _capacity) { reserve(_size + 5); }
-        // Copy everything from at to at + 1
-        for(size_t i = at; i < _size; i++) {
-            array[i + 1] = array[i];
+        // Check if size == 0
+        if(_size == 0) { array[0] = t; }
+        // Move everything right by one
+        for(size_t i = _size; i > at; i--) {
+            array[i] = array[i - 1];
         }
         array[at] = t;
         _size++;
