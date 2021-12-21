@@ -56,6 +56,9 @@ namespace Kernel {
             // The enviroment is taken from the execing process.
             int Exec(uint8_t* data, size_t length, char** argv, int arc);
 
+            // Create a task running in kernel space.
+            int CreateKernelTask(void (*start)(void*), void* arg, uint64_t stack_size);
+
             // Implementation of IPCHint syscall.
             int64_t IPCHint(int64_t msg_len, int64_t pipe_name_string, int64_t pipe_name_string_len);
 
