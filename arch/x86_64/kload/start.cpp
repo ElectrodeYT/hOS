@@ -5,7 +5,7 @@
 #include <mem.h>
 #include <mem/PM/physalloc.h>
 #include <mem/VM/virtmem.h>
-#include <debug/serial.h>
+#include <debug/klog.h>
 #include <kmain.h>
 #include <interrupts.h>
 #include <debug/serial.h>
@@ -27,7 +27,9 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     __init_heap();
     // Setup serial debug output
     __init_serial();
-
+    // Init KLog
+    Kernel::KLog::the().registerCallback(Kernel::Debug::SerialPrintWrap, NULL);
+        
     // Call the global constructors
     for (ctor_constructor* ctor = &start_ctors; ctor < &end_ctors; ctor++) {
         (*ctor)();

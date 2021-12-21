@@ -9,6 +9,8 @@ namespace Kernel {
         void SerialPrint(const char* c);
         void SerialPrintInt(long i, int base);
         void SerialPrintf(const char* str, ...);
+        
+        void SerialPrintWrap(void* null, const char* c);
     }
 }
 

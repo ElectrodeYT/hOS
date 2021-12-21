@@ -1,6 +1,6 @@
 #include <mem.h>
 #include <processes/syscalls/syscall.h>
-#include <debug/serial.h>
+#include <debug/klog.h>
 #include <processes/scheduler.h>
 #include <mem/PM/physalloc.h>
 #include <mem/VM/virtmem.h>
@@ -31,7 +31,7 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
             }
             // memcopy((void*)regs->rbx, str, regs->rcx);
             str[regs->rcx] = '\0';
-            Debug::SerialPrint(str);
+            KLog::the().printf(str);
             delete str;
             break;
         }
@@ -44,13 +44,13 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
         }
         // munmap
         case 3: {
-            Debug::SerialPrintf("TODO: munmap\r\n");
+            KLog::the().printf("TODO: munmap\r\n");
             regs->rax = -ENOSYS;
             break;
         }
         // exit
         case 4: {
-            Debug::SerialPrintf("Process %i exited with code %i\r\n", Processes::Scheduler::the().curr_proc, regs->rbx);
+            KLog::the().printf("Process %i exited with code %i\r\n", Processes::Scheduler::the().curr_proc, regs->rbx);
             Processes::Scheduler::the().KillCurrentProcess();
             // We dont want interrupts in the scheduler lol
             asm volatile ("cli");
@@ -60,55 +60,55 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
         }
         // fork
         case 5: {
-            Debug::SerialPrintf("fork syscall: pid %i\r\n", this_proc->pid);
+            KLog::the().printf("fork syscall: pid %i\r\n", this_proc->pid);
             regs->rax = fork(regs);
             break;
         }
         // ipchint
         case 6: {
-            // Debug::SerialPrintf("ipchint: pid %i, max size %x, string address %x, string length %x\r\n", this_proc->pid, regs->rbx, regs->rcx, regs->rdx);
+            // KLog::the().printf("ipchint: pid %i, max size %x, string address %x, string length %x\r\n", this_proc->pid, regs->rbx, regs->rcx, regs->rdx);
             regs->rax = (uint64_t)Processes::Scheduler::the().IPCHint(regs->rbx, regs->rcx, regs->rdx);
             break;
         }
         // ipcsendpid
         case 7: {
-            Debug::SerialPrintf("ipcsendpid: TODO\r\n");
+            KLog::the().printf("ipcsendpid: TODO\r\n");
             regs->rax = -ENOSYS;
             break;
         }
         // ipcsendpipe
         case 8: {
-           //  Debug::SerialPrintf("ipcsendpipe: pid %i, buffer at %x, size %x, string at %x, string len %i\r\n", this_proc->pid, regs->rbx, regs->rcx, regs->rdx, regs->rdi);
+           //  KLog::the().printf("ipcsendpipe: pid %i, buffer at %x, size %x, string at %x, string len %i\r\n", this_proc->pid, regs->rbx, regs->rcx, regs->rdx, regs->rdi);
             regs->rax = (uint64_t)Processes::Scheduler::the().IPCSendPipe(regs->rbx, regs->rcx, regs->rdx, regs->rdi);
             break;
         }
         // ipcrecv
         case 9: {
-            // Debug::SerialPrintf("ipcrecv: pid %i, buffer at %x, size %x %s", this_proc->pid, regs->rbx, regs->rcx, regs->rdx ? ", blocking\r\n" : "\r\n");
+            // KLog::the().printf("ipcrecv: pid %i, buffer at %x, size %x %s", this_proc->pid, regs->rbx, regs->rcx, regs->rdx ? ", blocking\r\n" : "\r\n");
             regs->rax = (uint64_t)Processes::Scheduler::the().IPCRecv(regs->rbx, regs->rcx, regs->rdx, regs);
             break;
         }
         // iohint
         case 10: {
-            Debug::SerialPrintf("iohint: TODO\r\n");
+            KLog::the().printf("iohint: TODO\r\n");
             regs->rax = -ENOSYS;
             break;
         }
         // iowrite
         case 11: {
-            Debug::SerialPrintf("iowrite: TODO\r\n");
+            KLog::the().printf("iowrite: TODO\r\n");
             regs->rax = -ENOSYS;
             break;
         }
         // ioread
         case 12: {
-            Debug::SerialPrintf("ioread: TODO\r\n");
+            KLog::the().printf("ioread: TODO\r\n");
             regs->rax = -ENOSYS;
             break;
         }
         // irqhint
         case 13: {
-            Debug::SerialPrintf("irqhint: TODO\r\n");
+            KLog::the().printf("irqhint: TODO\r\n");
             regs->rax = -ENOSYS;
             break;
         }
@@ -117,7 +117,7 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
             regs->rax = iommap(this_proc, regs->rbx, regs->rcx);
             break;
         }
-        default: Debug::SerialPrintf("Got invalid syscall: %x\r\n", (uint64_t)regs->rax); regs->rax = -ENOSYS; break;
+        default: KLog::the().printf("Got invalid syscall: %x\r\n", (uint64_t)regs->rax); regs->rax = -ENOSYS; break;
     }
 }
 

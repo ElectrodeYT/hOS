@@ -73,5 +73,9 @@ namespace Kernel {
 
             va_end(args);
         }
+
+        void SerialPrintWrap(void* null, const char* c) {
+            SerialPrint(c);
+        }
     }
 }

@@ -3,7 +3,7 @@
 #include <mem/VM/virtmem.h>
 #include <processes/scheduler.h>
 #include <timer.h>
-#include <debug/serial.h>
+#include <debug/klog.h>
 #include <panic.h>
 #include <CPP/string.h>
 #include <early-boot.h>
@@ -43,7 +43,7 @@ namespace Kernel {
 
             ELF elf(data, length);
             if(!elf.readHeader()) {
-                Debug::SerialPrintf("Failed to load ELF file for process %s\r\n", argv[0]);
+                KLog::the().printf("Failed to load ELF file for process %s\r\n", argv[0]);
                 return -EINVAL;
             }
 
@@ -58,7 +58,7 @@ namespace Kernel {
             new_proc->name = new char[name_len + 1];
             memcopy(argv[0], new_proc->name, name_len + 1);
 
-            Debug::SerialPrintf("Creating new process %s\r\n", new_proc->name);
+            KLog::the().printf("Creating new process %s\r\n", new_proc->name);
 
             
             // We want to save the current page table, as we need to switch to it later
@@ -76,7 +76,7 @@ namespace Kernel {
                     mapping->base = section->vaddr & ~(0xFFF);
                     mapping->size = round_to_page_up(section->segment_size);
 
-                    Debug::SerialPrintf("Mapping for ELF segment %i: base %x, size %x\r\n", i, mapping->base, mapping->size);
+                    KLog::the().printf("Mapping for ELF segment %i: base %x, size %x\r\n", i, mapping->base, mapping->size);
 
                     // Allocate it
                     size_t page_count = 0;
@@ -365,7 +365,7 @@ namespace Kernel {
         void Scheduler::KillCurrentProcess() {
             ASSERT(processes.size() > curr_proc, "KillCurrentProcess() called while curr_proc is out of range!");
             Process* proc = processes.at(curr_proc);
-            // Debug::SerialPrintf("Killing %s\r\n", proc->name);
+            // KLog::the().printf("Killing %s\r\n", proc->name);
             uint64_t state = save_irqdisable();
             
             // Demap all the stacks and delete all threads
@@ -489,12 +489,12 @@ namespace Kernel {
             ASSERT(processes.size(), "Attempted to begin scheduling without any processes");
             ASSERT(processes.at(0)->threads.size(), "PID 0 has no threads");
             curr_proc = 0;
-            Debug::SerialPrintf("First schedule init complete, processes count %i\r\n", processes.size());
+            KLog::the().printf("First schedule init complete, processes count %i\r\n", processes.size());
             first_schedule_init_done = true;
         }
 
         void Scheduler::TimerCallback(Interrupts::ISRRegisters* regs) {
-            //Debug::SerialPrintf("Scheduler timer callback\r\n");
+            //KLog::the().printf("Scheduler timer callback\r\n");
             // Bail if the schedule has not yet been inited, or if we were in kernel mode
             if(!first_schedule_init_done) { return; }
             
@@ -503,7 +503,7 @@ namespace Kernel {
                 if(first_schedule_complete) {
                     SaveContext(regs);
                 }
-                //Debug::SerialPrintf("Calling scheduler\r\n");
+                //KLog::the().printf("Calling scheduler\r\n");
                 Schedule(regs);
             }
         }

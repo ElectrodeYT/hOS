@@ -1,7 +1,7 @@
 #include <mem.h>
 #include <kernel-drivers/PCI.h>
 #include <hardware/instructions.h>
-#include <debug/serial.h>
+#include <debug/klog.h>
 
 namespace Kernel {
     uint16_t PCI::configRead(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
@@ -24,13 +24,13 @@ namespace Kernel {
     }
 
     bool PCI::probe() {
-        Debug::SerialPrintf("--- BEGIN PCI PROBE ---\n\r");
+        KLog::the().printf("--- BEGIN PCI PROBE ---\n\r");
         for(uint16_t bus = 0; bus < 256; bus++) { // Bus is actually 8 bits, but since we count from 0 -> 255 and i cant be bothered to make a non-forever looping version of that this will work
             for(uint8_t device = 0; device < 32; device++) {
                 probeDevice((uint8_t)bus, device);
             }
         }
-        Debug::SerialPrintf("--- END PCI PROBE ---\n\r");
+        KLog::the().printf("--- END PCI PROBE ---\n\r");
         return true;
     }
 
@@ -48,8 +48,8 @@ namespace Kernel {
         if(deviceVendor(bus, slot, function) == 0xFFFF) { return; } // Doesnt exist
         uint8_t device_class = deviceClass(bus, slot, function);
         uint8_t device_subclass = deviceClass(bus, slot, function);
-        Debug::SerialPrintf("%i:%i.%i: Class %i (%x), %s; subclass %i (%x), %s\n\r", (unsigned int)bus, (unsigned int)slot, (unsigned int)function, device_class, device_class, classToString(device_class), device_subclass, device_subclass, subclassToString(device_class, device_subclass));
-        Debug::SerialPrintf("\tDevice Vendor: %x, Device ID: %x\n\r", deviceVendor(bus, slot, function), deviceID(bus, slot, function));
+        KLog::the().printf("%i:%i.%i: Class %i (%x), %s; subclass %i (%x), %s\n\r", (unsigned int)bus, (unsigned int)slot, (unsigned int)function, device_class, device_class, classToString(device_class), device_subclass, device_subclass, subclassToString(device_class, device_subclass));
+        KLog::the().printf("\tDevice Vendor: %x, Device ID: %x\n\r", deviceVendor(bus, slot, function), deviceID(bus, slot, function));
     }
 
     const char* PCI::classToString(uint8_t c) {
