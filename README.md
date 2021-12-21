@@ -5,6 +5,10 @@ OS Project. Dont expect much lol.
 
 written in c++.
 
+# Philosophy
+Has changed a lot during development, but at this point i want it to become a monolithic/hybrid kernel, using something like UBI/EDI/CDI for "less important" drivers (probably wont ever happen)
+Used to be a microkernel, is being changed
+
 # Cloning
 This project uses git submodules, so clone it like this:
 ```
