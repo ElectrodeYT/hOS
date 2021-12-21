@@ -76,6 +76,7 @@ namespace Kernel {
 
         void SerialPrintWrap(void* null, const char* c) {
             SerialPrint(c);
+            (void)null;
         }
     }
 }
