@@ -8,11 +8,24 @@
 namespace Kernel {
     class KLog {
     public:
-        void printf(const char* fmt, ...) __attribute__ ((format (printf, 2, 3)));
+        void printf(const char* fmt, ...);
 
         void registerCallback(void (*callback)(void*, const char*), void* arg) {
+            acquire(&mutex);
             callbacks.push_back(callback);
             arguments.push_back(arg);
+            release(&mutex);
+        }
+
+        void deregisterCallback(void (*callback)(void*, const char*)) {
+            acquire(&mutex);
+            for(size_t i = 0; i < callbacks.size(); i++) {
+                if(callbacks.at(i) == callback) {
+                    callbacks.remove(i);
+                    arguments.remove(i);
+                }
+            }
+            release(&mutex);
         }
 
         static KLog& the() {
