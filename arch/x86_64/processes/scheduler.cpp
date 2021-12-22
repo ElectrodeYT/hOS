@@ -185,6 +185,36 @@ namespace Kernel {
             return CreateProcessImpl(data, length, argv, argc, fake_env, 0);
         }
 
+        int Scheduler::CreateKernelTask(void (*start)(void*), void* arg, uint64_t stack_size) {
+            Processes::Process* proc = new Processes::Process;
+            proc->page_table = VM::Manager::the().CreateNewPageTable();
+            proc->is_kernel = true;
+            proc->name = new char[8];
+            proc->pid = GetNextPid();
+            // Set the parent
+            proc->parent = 0;
+            // Copy the name
+            memcopy((void*)"kworker", proc->name, 8);
+            // Init thread
+            Thread* thread = new Processes::Thread;
+            thread->stack_size = stack_size * 1024;
+            thread->stack_base = (uint64_t)VM::Manager::the().AllocatePages(stack_size);
+            thread->tid = 0;
+            thread->regs.page_table = proc->page_table;
+            thread->regs.rflags = 0x202;
+            thread->regs.cs = 0x8;
+            thread->regs.ss = 0x10;
+            thread->regs.rip = (uint64_t)start;
+            thread->regs.rdi = (uint64_t)arg;
+            thread->regs.rsp = thread->stack_base + thread->stack_size;
+            thread->blocked = Thread::BlockState::Running;
+            // Add thread
+            proc->threads.push_back(thread);
+            // Add process
+            processes.push_back(proc);
+            return proc->pid;
+        }
+
         int64_t Scheduler::ForkCurrent(Interrupts::ISRRegisters* regs) {
             // Create new process
             Processes::Process* new_proc = new Processes::Process();
