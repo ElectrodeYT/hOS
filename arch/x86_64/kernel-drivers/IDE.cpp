@@ -162,11 +162,12 @@ int IDEDevice::read(int id, void* buf, size_t len, size_t offset) {
     waiting_on_irq = true;
     WriteLBA(sector, sector_count);
     SendCommand(ATA_CMD_READ_PIO_EXT);
+    // Check if we are already ready lol
+    //if(!(ReadStatus() & ATA_SR_DRQ)) {
+    //    while(waiting_on_irq);
+    //}
     while(len_to_go > 0) {
-        // Check if we are already ready lol
-        if(!(ReadStatus() & ATA_SR_DRQ)) {
-            while(waiting_on_irq);
-        }
+        while(!(ReadStatus() & ATA_SR_DRQ));
         // The data is ready, time to roll
         if(is_secondary) {
             for(size_t i = 0; i < 256; i++) { *(curr++) = ReadDataShortFromSec(); }
