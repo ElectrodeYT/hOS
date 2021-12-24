@@ -1,10 +1,11 @@
 #include <mem.h>
 #include <kernel-drivers/PCI.h>
+#include <kernel-drivers/IDE.h>
 #include <hardware/instructions.h>
 #include <debug/klog.h>
 
 namespace Kernel {
-    uint16_t PCI::configRead(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
+    uint16_t PCI::configReadImpl(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
         uint32_t address;
         uint32_t lbus  = (uint32_t)bus;
         uint32_t lslot = (uint32_t)slot;
@@ -21,6 +22,17 @@ namespace Kernel {
         // (offset & 2) * 8) = 0 will choose the first word of the 32-bit register
         tmp = (uint16_t)((inl(0xCFC) >> ((offset & 2) * 8)) & 0xFFFF);
         return tmp;
+    }
+
+    void PCI::configWrite(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset, uint16_t data) {
+        acquire(&mutex);
+        // Since PCI reads dwords, we need to know the current stuff at the other pci config location
+        uint16_t other = configReadImpl(bus, slot, func, offset ^ 1);
+        // Calculate uint32_t
+        uint32_t val = (offset & 1) ? other : (other << 16);
+        val |= (offset & 1) ? (data << 16) : data;
+        outl(0xCFC, val);
+        release(&mutex);
     }
 
     bool PCI::probe() {
@@ -50,6 +62,20 @@ namespace Kernel {
         uint8_t device_subclass = deviceClass(bus, slot, function);
         KLog::the().printf("%i:%i.%i: Class %i (%x), %s; subclass %i (%x), %s\n\r", (unsigned int)bus, (unsigned int)slot, (unsigned int)function, device_class, device_class, classToString(device_class), device_subclass, device_subclass, subclassToString(device_class, device_subclass));
         KLog::the().printf("\tDevice Vendor: %x, Device ID: %x\n\r", deviceVendor(bus, slot, function), deviceID(bus, slot, function));
+
+        // TODO: actually have a good way to load PCI drivers
+        PCIDevice* driver = NULL;
+        if(device_class == 0x1 && device_subclass == 0x1) {
+            KLog::the().printf("\tHas device driver: IDE\n\r");
+            driver = new IDEDevice(bus, slot, function);
+            if(!driver->Initialize()) {
+                KLog::the().printf("\tIDE driver failed to initialize\n\r");
+                delete driver;
+                driver = NULL;
+            }
+        }
+
+        if(driver != NULL) { device_drivers.push_back(driver); }
     }
 
     const char* PCI::classToString(uint8_t c) {
