@@ -40,7 +40,8 @@ namespace Kernel {
       // Interrupt handlers
       typedef void (*irq_handler_t)(struct ISRRegisters*);
       void RegisterIRQHandler(int irq_number, irq_handler_t handler);
-
+      void DeregisterIRQHandler(int irq_number);
+      
       // Proper Interrupt handlers
       void HandleISR(ISRRegisters* registers);
       void HandleIRQ(ISRRegisters* registers);

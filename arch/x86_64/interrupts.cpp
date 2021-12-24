@@ -207,6 +207,10 @@ namespace Kernel {
         irq_handlers[irq_number] = handler;
     }
 
+    void Interrupts::DeregisterIRQHandler(int irq_number) {
+        irq_handlers[irq_number] = NULL;
+    }
+
     void Interrupts::HandleIRQ(ISRRegisters* registers) {
         // Check if a handler exists
         // Debug::SerialPrint("irq: got irq "); Debug::SerialPrintInt(registers->int_num, 10); Debug::SerialPrint("\n\r");
