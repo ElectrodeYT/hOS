@@ -7,10 +7,23 @@
 #include <mem/VM/virtmem.h>
 #include <processes/scheduler.h>
 #include <kernel-drivers/PCI.h>
+#include <kernel-drivers/IDE.h>
+#include <kernel-drivers/BlockDevices.h>
 
 namespace Kernel {
     void kTaskTest(void* arg) {
         KLog::the().printf("it works!\n\r");
+        KLog::the().printf("Test read from ide drive 0\n\r");
+        BlockDevice* dev = BlockManager::the().GetBlockDevice(0);
+        if(!dev) {
+            KLog::the().printf("BlockManager return null. what the fuck?\n\r");
+        } else {
+            uint8_t* buffer = new uint8_t[1024];
+            dev->read(buffer, 1024, 0);
+            if(buffer[512] == 0x45 && buffer[513] == 0x46 && buffer[514] == 0x49) {
+                KLog::the().printf("EFI seems to be at the start of LBA1. Success!\n\r");
+            }
+        }
         for(;;);
         (void)arg;
     }
