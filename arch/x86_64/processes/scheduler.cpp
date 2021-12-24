@@ -513,6 +513,35 @@ namespace Kernel {
             return 0;
         }
 
+        void Scheduler::WaitOnIRQ(int irq) {
+            // The timer subsystem needs IRQ 0, so we simply return lol
+            if(irq == 0) { return; }
+            // We now check if we need to register a callback for this interrupt
+            if(irq_wait_states[irq]++) { Interrupts::the().RegisterIRQHandler(irq, SchedulerIRQCallbackWrapper); }
+            // Set wait state, being carefull to set irq before the block
+            Process* curr = CurrentProcess();
+            Thread* curr_t = curr->threads.at(curr_thread);
+            curr_t->irq = irq;
+            curr_t->blocked = Thread::BlockState::WaitingOnIRQ;
+            while(curr_t->blocked == Thread::BlockState::WaitingOnIRQ);
+            // We have now in fact unblocked, decrement irq_wait_states
+            irq_wait_states[irq]--;
+            if(irq_wait_states[irq] == 0) { Interrupts::the().DeregisterIRQHandler(irq); }
+        }
+
+        void Scheduler::IRQHandler(Interrupts::ISRRegisters* regs) {
+            // Loop through all processes and threads and unblock all ones waiting for our irq
+            for(size_t i = 0; i < processes.size(); i++) {
+                Process* proc = processes.at(i);
+                for(size_t y = 0; y < proc->threads.size(); y++) {
+                    Thread* thread = proc->threads.at(y);
+                    if(thread->blocked == Thread::BlockState::WaitingOnIRQ && thread->irq == regs->int_num) {
+                        thread->blocked = Thread::BlockState::Running;
+                    }
+                }
+            }
+        }
+
         void Scheduler::FirstSchedule() {
             // This doesnt actually schedule anything, but prepares internal values for scheduling to begin
             // Scheduling is always done from the timer interrupt
@@ -536,6 +565,10 @@ namespace Kernel {
                 //KLog::the().printf("Calling scheduler\r\n");
                 Schedule(regs);
             }
+        }
+
+        void SchedulerIRQCallbackWrapper(Interrupts::ISRRegisters* regs) {
+            Scheduler::the().IRQHandler(regs);
         }
     }
 }

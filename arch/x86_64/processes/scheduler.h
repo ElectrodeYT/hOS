@@ -68,6 +68,12 @@ namespace Kernel {
             // Implementation of IPCSendpipe syscall
             int64_t IPCSendPipe(int64_t buffer, int64_t buffer_len, int64_t pipe_name_string, int64_t pipe_name_string_len);
 
+            // Wait on a IRQ
+            void WaitOnIRQ(int irq);
+
+            // IRQ Handler, for waiting tasks
+            void IRQHandler(Interrupts::ISRRegisters* regs);
+
             IPCNamedPipe* FindNamedPipe(const char* name) {
                 for(size_t i = 0; i < named_pipes.size(); i++) {
                     IPCNamedPipe* curr = named_pipes.at(i);
@@ -108,9 +114,11 @@ namespace Kernel {
                 return curr;
             }
 
+            // List of IRQs we have been waiting on
+            uint64_t irq_wait_states[64];
+
             const int timer_switch = 5;
             int timer_curr = 0;
-
 
 
             Vector<IPCNamedPipe*> named_pipes;
@@ -121,6 +129,7 @@ namespace Kernel {
             bool running_proc_killed = false;
             bool running_thread_killed = false;
         };
+        void SchedulerIRQCallbackWrapper(Interrupts::ISRRegisters* regs);
     }
 }
 

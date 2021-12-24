@@ -14,9 +14,13 @@ namespace Kernel {
             enum class BlockState {
                 Running = 0,
                 WaitingOnMessage,
+                WaitingOnIRQ, // A Driver this thread has called into is waiting on a IRQ
                 ShouldDestroy
             };
             BlockState blocked;
+
+            uint64_t irq; // The IRQ this thread is waiting on if it is waiting.
+
             // Syscall stack mapping.
             // This is specific to each thread, and is not in process mappings.
             // It will be deallocated when a thread is killed.
