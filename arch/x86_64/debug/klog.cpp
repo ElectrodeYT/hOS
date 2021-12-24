@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <debug/serial.h>
 #include <debug/klog.h>
 #include <stdarg.h>
