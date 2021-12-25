@@ -124,7 +124,8 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
 
 
     // We are in a much safer place now; dereferencing null pointers will for example now crash, before it would have been identity mapped to physical memory.
-
+    // Allocate kheap spare area
+    kheap_init_spare_area();
 
     // Initialize TSS
     load_tss();

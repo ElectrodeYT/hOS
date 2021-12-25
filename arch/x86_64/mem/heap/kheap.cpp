@@ -1,4 +1,5 @@
 #include <mem/heap/kheap.h>
+#include <mem/VM/virtmem.h>
 #include <stdint.h>
 #include <panic.h>
 #include <CPP/mutex.h>
@@ -25,8 +26,11 @@ struct kheap_ll {
 
 mutex_t kheap_mutex;
 
+kheap_ll* spare;
+
 // TODO: use space better
 void* kheap_alloc(size_t size) {
+    bool must_allocate_new_spare = false;
     acquire(&kheap_mutex);
     if(heap_initialized == false) { for(;;); }
     // Traverse the ll to find a free block
@@ -35,8 +39,13 @@ void* kheap_alloc(size_t size) {
         if(curr->type == KHEAP_LL_TYPE_USED) {
             fail:
             // If curr->next == NULL no more space is available
+            // Use the spare area, and attempt to allocate a new spare area
+            // If we cant, just crash
             if(curr->next == 0) {
-                Kernel::Debug::Panic("kheap: out of memory");
+                if(spare == NULL) { Kernel::Debug::Panic("no kheap spare area"); }
+                curr->next = spare;
+                spare = NULL;
+                must_allocate_new_spare = true;
             }
             curr = curr->next;
         } else {
@@ -53,6 +62,8 @@ void* kheap_alloc(size_t size) {
             if(curr->size < (size + sizeof(kheap_ll) + 10)) { // Arbitraly chosen number
                 // Just return now
                 release(&kheap_mutex);
+                // Check if we need to reallocate a new spare area first
+                if(must_allocate_new_spare) { kheap_init_spare_area(); }
                 return return_val;
             }
             // Calculate the location of the next linked list
@@ -64,6 +75,8 @@ void* kheap_alloc(size_t size) {
             curr->next = next_ll;
             curr->size = size;
             release(&kheap_mutex);
+            // Check if we need to reallocate a new spare area first
+            if(must_allocate_new_spare) { kheap_init_spare_area(); }
             // Return now
             return return_val;
         }
@@ -101,4 +114,15 @@ void kheap_init() {
     ll->next = NULL;
 
     heap_initialized = true;
+}
+
+
+void kheap_init_spare_area() {
+    // Allocate spare ll entry
+    spare = NULL;
+    spare = (kheap_ll*)Kernel::VM::Manager::the().AllocatePages((1 * 1024 * 1024) / 4096);
+    if(!spare) { Kernel::Debug::Panic("failed to allocate kheap spare area"); }
+    spare->next = NULL;
+    spare->size = (1 * 1024 * 1024) - sizeof(kheap_ll);
+    spare->type = KHEAP_LL_TYPE_FREE;
 }
