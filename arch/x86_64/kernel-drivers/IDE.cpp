@@ -1,6 +1,7 @@
 #include <kernel-drivers/IDE.h>
 #include <processes/scheduler.h>
 #include <debug/klog.h>
+#include <panic.h>
 #include <errno.h>
 #include <mem.h>
 
@@ -149,13 +150,14 @@ int IDEDevice::read(int id, void* buf, size_t len, size_t offset) {
     ReadStatus();
     // Calculate sector(s)
     uint64_t sector = offset / 512;
-    uint64_t last_sector = (offset + len) / 512;
+    uint64_t last_sector = (offset + len - 1) / 512;
     uint64_t sector_count = (last_sector - sector) + 1;
     // Get the sectors
     // First we need to calculate the offset in the first sector
     uint64_t first_sector_offset = offset % 512;
     int64_t len_to_go = (int64_t)len;
     // Allocate memory for the sectors
+    // TODO: maybe allocate this using VM::Manager?
     uint16_t* buffer = new uint16_t[sector_count * 256];
     uint16_t* curr = buffer;
     // Send to command
@@ -176,8 +178,10 @@ int IDEDevice::read(int id, void* buf, size_t len, size_t offset) {
         }
         len_to_go -= 512;
     }
+    ASSERT(!(ReadStatus() & ATA_SR_DRQ), "IDE: Drive DRQ asserted after read done");
     // Memcopy the data we want
     memcopy((buffer) + first_sector_offset, buf, len);
+    delete buffer;
     release(&mutex);
     return len;
 }

@@ -42,7 +42,7 @@ private:
             outb(secondary_bus_io_base + 3, (lba >> 24) & 0xFF); // LBA4
             outb(secondary_bus_io_base + 4, (lba >> 32) & 0xFF); // LBA5
             outb(secondary_bus_io_base + 5, (lba >> 40) & 0xFF); // LBA6
-            outb(secondary_bus_io_base + 2, (sec_count >> 8) & 0xFF); // Sec low
+            outb(secondary_bus_io_base + 2, sec_count & 0xFF); // Sec low
             outb(secondary_bus_io_base + 3, (lba >> 0) & 0xFF); // LBA1
             outb(secondary_bus_io_base + 4, (lba >> 8) & 0xFF); // LBA2
             outb(secondary_bus_io_base + 5, (lba >> 16) & 0xFF); // LBA3
@@ -51,7 +51,7 @@ private:
             outb(primary_bus_io_base + 3, (lba >> 24) & 0xFF); // LBA4
             outb(primary_bus_io_base + 4, (lba >> 32) & 0xFF); // LBA5
             outb(primary_bus_io_base + 5, (lba >> 40) & 0xFF); // LBA6
-            outb(primary_bus_io_base + 2, (sec_count >> 8) & 0xFF); // Sec low
+            outb(primary_bus_io_base + 2, sec_count & 0xFF); // Sec low
             outb(primary_bus_io_base + 3, (lba >> 0) & 0xFF); // LBA1
             outb(primary_bus_io_base + 4, (lba >> 8) & 0xFF); // LBA2
             outb(primary_bus_io_base + 5, (lba >> 16) & 0xFF); // LBA3
@@ -103,7 +103,7 @@ private:
         ATA_SR_DRQ = 0x8, // Data Request Ready
         ATA_SR_DSC = 0x10, // Drive Seek Complete
         ATA_SR_DF = 0x20, // Drive Write Fault
-        ATA_SR_DRDY = 0x40, // Drive Read
+        ATA_SR_RDY = 0x40, // Drive Ready
         ATA_SR_BSY = 0x80 // Drive Busy
     };
 
