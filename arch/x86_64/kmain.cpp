@@ -9,12 +9,13 @@
 #include <kernel-drivers/PCI.h>
 #include <kernel-drivers/IDE.h>
 #include <kernel-drivers/BlockDevices.h>
+#include <kernel-drivers/VFS.h>
 
 namespace Kernel {
     void kTaskTest(void* arg) {
         KLog::the().printf("it works!\n\r");
         KLog::the().printf("Test read from ide drive 0\n\r");
-        BlockDevice* dev = BlockManager::the().GetBlockDevice(0);
+        BlockDevice* dev = BlockManager::the().GetBlockDevice(0, 0);
         if(!dev) {
             KLog::the().printf("BlockManager return null. what the fuck?\n\r");
         } else {
@@ -22,6 +23,15 @@ namespace Kernel {
             dev->read(buffer, 1024, 0);
             if(buffer[512] == 0x45 && buffer[513] == 0x46 && buffer[514] == 0x49) {
                 KLog::the().printf("EFI seems to be at the start of LBA1. Success!\n\r");
+            }
+            // Try to read EchFS on the first partition
+            BlockDevice* part = BlockManager::the().GetBlockDevice(0, 1);
+            if(!part) {
+                KLog::the().printf("Blockmanager didnt find a first partition. what?\n\r");
+            } else {
+                VFSDriver* drv = new EchFSDriver;
+                drv->block = part;
+                drv->mount();
             }
         }
         for(;;);
@@ -45,6 +55,9 @@ namespace Kernel {
 
         // Probe PCI devices
         PCI::the().probe();
+
+        // Read partition tables
+        BlockManager::the().ParsePartitions();
 
         // Spawn bootstrap processes
         for(size_t i = 0; i < mod_count; i++) {
