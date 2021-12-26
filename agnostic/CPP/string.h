@@ -2,7 +2,7 @@
 #define STRING_H
 
 char* itoa(long value, char* str, long base);
-long strlen(char* str);
+long strlen(const char* str);
 int strcmp(const char* a, const char* b);
 
 #endif

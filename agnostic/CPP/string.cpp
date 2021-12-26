@@ -30,9 +30,10 @@ char* itoa(long value, char* result, long base) {
     return result;
 }
 
-long strlen(char* str) {
+long strlen(const char* str) {
     int size = 0;
-    while(*str++ != '\0') {
+    char* curr = (char*)str;
+    while(*curr++ != '\0') {
         size++;
     }
     return size;
