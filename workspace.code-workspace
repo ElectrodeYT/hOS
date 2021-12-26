@@ -14,7 +14,10 @@
 			"string_view": "cpp",
 			"rope": "cpp",
 			"regex": "cpp",
-			"cstdint": "cpp"
+			"cstdint": "cpp",
+			"typeindex": "cpp",
+			"typeinfo": "cpp",
+			"buffer": "cpp"
 		}
 	}
 }

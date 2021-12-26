@@ -158,7 +158,12 @@ int IDEDevice::read(int id, void* buf, size_t len, size_t offset) {
     int64_t len_to_go = (int64_t)len;
     // Allocate memory for the sectors
     // TODO: maybe allocate this using VM::Manager?
-    uint16_t* buffer = new uint16_t[sector_count * 256];
+    uint16_t* buffer;
+    if((sector_count * 512) > 4096) {
+        buffer = (uint16_t*)VM::Manager::the().AllocatePages(((sector_count * 512) / 4096) + (((sector_count * 512) & 4095) ? 1 : 0));
+    } else {
+        buffer = new uint16_t[sector_count * 256];
+    }
     uint16_t* curr = buffer;
     // Send to command
     waiting_on_irq = true;
@@ -181,7 +186,11 @@ int IDEDevice::read(int id, void* buf, size_t len, size_t offset) {
     ASSERT(!(ReadStatus() & ATA_SR_DRQ), "IDE: Drive DRQ asserted after read done");
     // Memcopy the data we want
     memcopy((buffer) + first_sector_offset, buf, len);
-    delete buffer;
+    if((sector_count * 512) > 4096) {
+        VM::Manager::the().FreePages(buffer);
+    } else {
+        delete buffer;
+    }
     release(&mutex);
     return len;
 }

@@ -2,8 +2,8 @@
 #define VFS_H
 
 // The VFS is inspired by James Molloy's VFS
-
 #include <stddef.h>
+#include <CPP/vector.h>
 #include <kernel-drivers/BlockDevices.h>
 #include <errno.h>
 
@@ -22,7 +22,7 @@ public:
     }
 
     struct fs_node {
-        char name[128];
+        char* name;
         uint32_t mask; // Permissions mask
         uint32_t uid; // User ID
         uint32_t gid; // Group ID
@@ -61,10 +61,11 @@ public:
     virtual VFS::dirent* readdir(VFS::fs_node* node, size_t num) { return NULL; (void)node; (void)num; }
     virtual VFS::fs_node* finddir(VFS::fs_node* node, const char* name) { return NULL; (void)node; (void)name; }
 
-    virtual bool mount();
+    virtual VFS::fs_node* mount();
 
     BlockDevice* block;
 protected:
+    VFS::fs_node* root_node;
     bool mounted = false;
 private:
 };
@@ -78,17 +79,51 @@ class EchFSDriver : public VFSDriver {
     VFS::dirent* readdir(VFS::fs_node* node, size_t num) override;
     VFS::fs_node* finddir(VFS::fs_node* node, const char* name) override;
 
-    bool mount() override;
+    VFS::fs_node* mount() override;
 
 private:
+    void dumpBlockStates();
+    void dumpMainDirectory();
+
     inline uint64_t blockOffset(uint64_t block) { return block * block_size; }
+
+    struct echfs_dir_entry {
+        uint64_t dir_id;
+        uint8_t type;
+        char name[201];
+        uint64_t a_time;
+        uint64_t m_time;
+        uint16_t permissions;
+        uint16_t owner;
+        uint16_t group;
+        uint64_t c_time;
+        uint64_t starting_block;
+        uint64_t file_size; 
+    } __attribute__((packed));
+
+    struct echfs_file {
+        VFS::fs_node* node;
+        uint64_t dir_entry;
+        Vector<uint64_t> known_blocks;
+        uint64_t dir_id;
+        bool opened = false;
+    };
+
+    inline uint64_t main_dir_entry_len() {
+        return (main_directory_block_size * block_size) / sizeof(echfs_dir_entry);
+    }
 
     uint64_t block_count = 0;
     uint64_t block_size;
     uint64_t allocation_table_block_size;
+    uint64_t main_directory_block_size;
     uint64_t* allocation_table;
+    echfs_dir_entry* main_directory_table;
 
     bool is_allocation_table_on_heap;
+    bool is_main_directory_table_on_heap;
+
+    Vector<echfs_file> cached_file_entries;
 };
 
 }
