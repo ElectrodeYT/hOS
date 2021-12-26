@@ -42,6 +42,7 @@ void* kheap_alloc(size_t size) {
             // Use the spare area, and attempt to allocate a new spare area
             // If we cant, just crash
             if(curr->next == 0) {
+                if(spare->size < size) { Kernel::Debug::Panic("spare area too small"); }
                 if(spare == NULL) { Kernel::Debug::Panic("no kheap spare area"); }
                 curr->next = spare;
                 spare = NULL;
