@@ -40,35 +40,41 @@ VFS::fs_node* EchFSDriver::finddir(VFS::fs_node* node, const char* name) {
     if(node->flags != FS_NODE_DIR && node->flags != (FS_NODE_DIR | FS_NODE_MOUNT)) { return NULL; }
     uint64_t entry_count = main_dir_entry_len();
     for(size_t i = 0; i < entry_count; i++) {
-        echfs_dir_entry entry = main_directory_table[i];
-        if(entry.dir_id != node->inode) { continue; }
-        if(strcmp(entry.name, name) == 0) {
+        echfs_dir_entry* entry = &main_directory_table[i];
+        if(entry->dir_id != node->inode) { continue; }
+        if(strcmp(entry->name, name) == 0) {
             // Check if we have this file cached
-            for(size_t y = 0; y < cached_file_entries.size(); y++) {
-                echfs_file cache = cached_file_entries.at(y);
-                if(cache.dir_entry == i) {
-                    return cache.node;
+            echfs_file_ll* curr = cached_file_entries;
+            while(curr) {
+                echfs_file* cache = curr->file;
+                if(cache->dir_entry == i) {
+                    return cache->node;
                 }
             }
+            // We do not have a cached entry for this, create a echfs_file and a fs_node for this
+            echfs_file* file_entry = new echfs_file;
+            VFS::fs_node* new_node = new VFS::fs_node;
+            new_node->driver = this;
+            new_node->flags = entry->type ? FS_NODE_DIR : FS_NODE_FILE;
+            new_node->inode = entry->type ? entry->starting_block : i;
+            new_node->length = entry->type ? 0 : entry->file_size;
+            new_node->uid = entry->owner;
+            new_node->gid = entry->group;
+            new_node->mask = entry->permissions;
+            new_node->open_count = 0;
+            
+            file_entry->node = new_node;
+            file_entry->dir_entry = i;
+            file_entry->dir_id = entry->type ? entry->starting_block : 0;
+            file_entry->opened = false;
+            
+            echfs_file_ll* ll_entry = new echfs_file_ll;
+            ll_entry->file = file_entry;
+            ll_entry->next = cached_file_entries;
+            cached_file_entries = ll_entry;
+
+            return new_node;
         }
-        // We do not have a cached entry for this, create a echfs_file and a fs_node for this
-        echfs_file file_entry;
-        VFS::fs_node* new_node = new VFS::fs_node;
-        new_node->driver = this;
-        new_node->flags = entry.type ? FS_NODE_DIR : FS_NODE_FILE;
-        new_node->inode = entry.type ? entry.starting_block : i;
-        new_node->length = entry.type ? 0 : entry.file_size;
-        new_node->uid = entry.owner;
-        new_node->gid = entry.group;
-        new_node->mask = entry.permissions;
-        new_node->open_count = 0;
-        
-        file_entry.node = new_node;
-        file_entry.dir_entry = i;
-        file_entry.dir_id = entry.type ? entry.starting_block : 0;
-        file_entry.opened = false;
-        cached_file_entries.push_back(file_entry);
-        return new_node;
     }
     return NULL;
 }
@@ -129,7 +135,7 @@ VFS::fs_node* EchFSDriver::mount() {
     root_node->inode = 0xFFFFFFFFFFFFFFFF;
     root_node->flags = FS_NODE_DIR | FS_NODE_MOUNT;
     dumpMainDirectory();
-
+    mounted = true;
     return root_node;
 }
 

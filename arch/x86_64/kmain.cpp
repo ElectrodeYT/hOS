@@ -31,7 +31,18 @@ namespace Kernel {
             } else {
                 VFSDriver* drv = new EchFSDriver;
                 drv->block = part;
-                drv->mount();
+                VFS::fs_node* mount = drv->mount();
+                if(!mount) {
+                    KLog::the().printf("EchFSDriver didnt mount\n\r");
+                } else {
+                    KLog::the().printf("finddir(\"hello.txt\"\n\r");
+                    VFS::fs_node* hello = mount->driver->finddir(mount, "hello.txt");
+                    if(!hello) {
+                        KLog::the().printf("finddir returned null\n\r");
+                    } else {
+
+                    }
+                }
             }
         }
         for(;;);

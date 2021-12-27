@@ -26,8 +26,8 @@ public:
         uint32_t mask; // Permissions mask
         uint32_t uid; // User ID
         uint32_t gid; // Group ID
-        uint32_t inode; // File Inode
-        uint32_t length; // File length
+        uint64_t inode; // File Inode
+        uint64_t length; // File length
         uint32_t flags; // FS Flags
         #define FS_NODE_FILE 0x1
         #define FS_NODE_DIR 0x2
@@ -106,7 +106,12 @@ private:
         uint64_t dir_entry;
         Vector<uint64_t> known_blocks;
         uint64_t dir_id;
-        bool opened = false;
+        bool opened;
+    };
+
+    struct echfs_file_ll {
+        echfs_file* file;
+        echfs_file_ll* next;
     };
 
     inline uint64_t main_dir_entry_len() {
@@ -123,7 +128,7 @@ private:
     bool is_allocation_table_on_heap;
     bool is_main_directory_table_on_heap;
 
-    Vector<echfs_file> cached_file_entries;
+    echfs_file_ll* cached_file_entries = NULL;
 };
 
 }
