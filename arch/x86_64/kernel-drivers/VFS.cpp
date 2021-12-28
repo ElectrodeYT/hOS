@@ -9,8 +9,64 @@ namespace Kernel {
 
 int EchFSDriver::read(VFS::fs_node* node, void* buf, size_t size, size_t offset) {
     if(!mounted) { return -EINVAL; }
-    (void)node; (void)buf; (void)size; (void)offset;
-    return -ENOSYS;
+    // We cant read a directory lol
+    if(node->flags == FS_NODE_DIR || node->flags == (FS_NODE_DIR & FS_NODE_MOUNT)) { return -EINVAL; }
+    // Find the echfs_file entry we have for this
+    echfs_file* file = NULL;
+    echfs_file_ll* curr_ll = cached_file_entries;
+    while(curr_ll) {
+        if(curr_ll->file->node == node) { file = curr_ll->file; break; }
+        curr_ll = curr_ll->next;
+    }
+    if(!file) { return -EINVAL; }
+
+    uint64_t end = offset + size;
+    // Check if we have the blocks we need buffered
+    if(file->known_blocks.size() < (end % block_size) + 1) {
+        // Special case if we have no blocks buffered
+        if(file->known_blocks.size() == 0) {
+            uint64_t file_dir_entry = file->dir_entry;
+            file->known_blocks.push_back(main_directory_table[file_dir_entry].starting_block);
+        }
+        // Traverse the blocks we need to get to the blocks we need
+        for(size_t curr_block = file->known_blocks.size(); curr_block < ((end / block_size) + 1); curr_block++) {
+            // Get the previous block
+            uint64_t prev_block_id = file->known_blocks.at(curr_block - 1);
+            // Read the next block
+            uint64_t curr_block_id = allocation_table[prev_block_id];
+            if(curr_block_id == 0) {
+                KLog::the().printf("EchFSDriver: file seems to have blocks pointing to free area\n\r");
+                return -ENOENT;
+            } else if(curr_block_id == 0xFFFFFFFFFFFFFFF0) {
+                KLog::the().printf("EchFSDriver: file seemt to have blocks pointing to reserved area\n\r");
+                return -ENOENT;
+            } else if(curr_block_id == 0xFFFFFFFFFFFFFFFF) {
+                KLog::the().printf("EchFSDriver: file read points to blocks after the end of the chain\n\r");
+                // Shorten size
+                size = ((curr_block - 1) * block_size) - offset;
+                break;
+            }
+            file->known_blocks.push_back(curr_block_id);
+        }
+    }
+    // We load the buffer each logical block at a time
+    uint64_t curr = offset;
+    uint64_t first_block_offset = (offset % block_size);
+    // The amount of data we still have to read
+    uint64_t remaining_len = size;
+    uint8_t* curr_buf = (uint8_t*)buf;
+    while(end > curr) {
+        // Calculate needed block
+        uint64_t block_id = file->known_blocks.at(curr / block_size);
+        // Calculate the amount of data we need from this block
+        uint64_t block_len = ((block_size - first_block_offset) <= remaining_len) ? (block_size - first_block_offset) : remaining_len;
+        // Read this data into the buffer
+        block->read(curr_buf, block_len, block_id * block_size);
+        remaining_len -= block_len;
+        curr += block_len;
+        first_block_offset = 0;
+    }
+    return size;
 }
 int EchFSDriver::write(VFS::fs_node* node, void* buf, size_t size, size_t offset) {
     if(!mounted) { return -EINVAL; }

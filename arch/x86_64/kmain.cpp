@@ -40,7 +40,13 @@ namespace Kernel {
                     if(!hello) {
                         KLog::the().printf("finddir returned null\n\r");
                     } else {
-
+                        // Read hello world lol
+                        char text[13];
+                        memset(text, 0, 13);
+                        uint64_t len_read = mount->driver->read(hello, text, 12, 0);
+                        if(len_read > 0) {
+                            KLog::the().printf("EchFSDriver read len %i: %s\n\r", len_read, text);
+                        }
                     }
                 }
             }
