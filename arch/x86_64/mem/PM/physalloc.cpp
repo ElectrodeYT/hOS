@@ -6,8 +6,10 @@
 #include <panic.h>
 #include <early-boot.h>
 
-#define BIT(b, x) ((b[(x)/8] & (1<<((x)%8))))
-#define BIT_I(i, x) (i & (1 << x))
+#define BIT(b, x) ((b[(x)/8] & (1ULL<<((x)%8))))
+#define BIT_CLEAR(b, x) (b[(x)/8] &= ~(1ULL<<((x)%8)))
+
+#define BIT_I(i, x) (i & (1ULL << x))
 
 namespace Kernel {
 
@@ -121,6 +123,10 @@ namespace PM {
     uint64_t AllocatePages(int count) {
         // Acquire physical memory mutex
         acquire(&mutex);
+        if(count >= 64) { Debug::Panic("PM: TODO: allocate more than 64 pages at once"); }
+        // We have a slightly faster but less space efficent method to allocate less than 64 pages using POPCNT
+        // Since most of the memory will be allocated with VM::AllocatePages, which allocates single pages,
+        // this wont really be a problem.
         descriptors* curr = pages;
         while(curr) {
             uint64_t* bitmap = (uint64_t*)(curr + 1);
@@ -151,8 +157,23 @@ namespace PM {
 
     void FreePages(uint64_t object, int count) {
         acquire(&mutex);
-        KLog::the().printf("PM: couldnt deallocate page %x, count %i, ignoring\n\r", object, count);
+        descriptors* curr = pages;
+        while(curr) {
+            uint64_t* bitmap = (uint64_t*)(curr + 1);
+            // Check if the object is in this page list
+            if(object >= curr->base && object <= (curr->base + curr->size)) {
+                // Got it, set the bits to 0
+                size_t page_offset = (object - curr->base) / 4096;
+                for(int i = 0; i < count; i++) {
+                    BIT_CLEAR(bitmap, page_offset + 1);
+                }
+                release(&mutex);
+                return;
+            }
+            curr = curr->next;
+        }
         release(&mutex);
+        KLog::the().printf("PM: couldnt deallocate page %x, count %i, ignoring\n\r", object, count);
     }
 }
 

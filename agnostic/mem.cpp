@@ -3,11 +3,11 @@
 #include <mem/heap/kheap.h>
 
 void* operator new(size_t size) {
-    return kheap_alloc(size);
+    return kheap_malloc(size);
 }
  
 void* operator new[](size_t size) {
-    return kheap_alloc(size);
+    return kheap_malloc(size);
 }
  
 void operator delete(void* p) {
@@ -31,7 +31,7 @@ void operator delete[](void* p, unsigned long idk) {
 }
 
 void* malloc(unsigned long size) {
-    return kheap_alloc(size);
+    return kheap_malloc(size);
 }
 
 void free(void* p) {

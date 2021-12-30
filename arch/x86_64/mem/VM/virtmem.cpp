@@ -18,10 +18,9 @@ namespace VM {
     // Virtual offset
     uint64_t virtual_offset = 0;
 
-    void InvalidatePage(uint64_t address) {
+    static void InvalidatePage(uint64_t address) {
         asm volatile("invlpg (%0)" : : "b"(address) : "memory");
     }
-
 
     void Init(stivale2_struct_tag_memmap* memmap, uint64_t hhdm_offset) {
         virtual_offset = hhdm_offset;
@@ -48,10 +47,7 @@ namespace VM {
         SwitchPageTables((uint64_t)page_table);
     }
 
-    // Set the page table to a specific table.
-    void SwitchPageTables(uint64_t table) {
-        asm volatile("mov %0, %%cr3" : : "r"(table));
-    }
+
 
     uint64_t CurrentPageTable() {
         uint64_t ret;
@@ -203,7 +199,7 @@ namespace VM {
     vmm_entry_page* hint;
     size_t hint_id;
 
-    void AllocateAndMap(uint64_t virt, size_t count) {
+    static void AllocateAndMap(uint64_t virt, size_t count) {
         for(size_t i = 0; i < count; i++) {
             uint64_t phys = PM::AllocatePages();
             if(!phys) { Debug::Panic("VM: kernel page allocation failed"); }

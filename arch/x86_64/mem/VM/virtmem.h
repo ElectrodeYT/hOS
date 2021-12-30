@@ -17,8 +17,11 @@ namespace Kernel {
         // Also creates the page tables, and changes to them.
         void Init(stivale2_struct_tag_memmap* memmap, uint64_t hhdm_offset);
 
-        // Sets CR3 to table. Must be a physical address.
-        void SwitchPageTables(uint64_t table);
+        // Set the page table to a specific table.
+        [[maybe_unused]] static void SwitchPageTables(uint64_t table) {
+            asm volatile("mov %0, %%cr3" : : "r"(table));
+        }
+
         // Gets the value of CR3
         uint64_t CurrentPageTable();
 
