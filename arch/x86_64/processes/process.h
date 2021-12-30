@@ -24,7 +24,7 @@ namespace Kernel {
             // Syscall stack mapping.
             // This is specific to each thread, and is not in process mappings.
             // It will be deallocated when a thread is killed.
-            VM::Manager::VMObject* syscall_stack_map;
+            VM::VMObject* syscall_stack_map;
 
             // Thread stack location.
             // If this thread is destroyed, it will be unmaped with a (fake) call to munmap.
@@ -44,7 +44,7 @@ namespace Kernel {
             Vector<Thread*> threads;
             // Store the base address of all mappings.
             // TODO: find a way to deallocate memory
-            Vector<VM::Manager::VMObject*> mappings;
+            Vector<VM::VMObject*> mappings;
 
             // Buffer for IPC
             // When a readipc_msg or waitipc_msg is done,

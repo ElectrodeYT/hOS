@@ -86,11 +86,11 @@ namespace Kernel {
                 // If the page was present, and the error was a write error, then we should copy the page and simply return
                 if((registers->error & 0b111) == 0b111) {
                     // Loop through the process's allocated pages and check if one matches the address where this happened
-                    VM::Manager::VMObject* found = NULL;
+                    VM::VMObject* found = NULL;
                     Processes::Process* curr = Processes::Scheduler::the().CurrentProcess();
                     uint64_t vm_object_page = 0;
                     for(size_t i = 0; i < curr->mappings.size(); i++) {
-                        VM::Manager::VMObject* curr_map = curr->mappings.at(i);
+                        VM::VMObject* curr_map = curr->mappings.at(i);
                         if((curr_map->base <= faulting) && ((curr_map->base + curr_map->size) >= faulting)) {
                             found = curr_map;
                             vm_object_page = ((faulting & ~(0xFFF)) - curr_map->base) / 4096;
@@ -103,18 +103,18 @@ namespace Kernel {
                         // If this is the last CoW, we just remap it as write
                         if(found->checkCopyOnWrite(vm_object_page) == 0) {
                             // Debug::SerialPrintf("This was the last reference to page %x, simply remapping as write\r\n", (faulting & ~(0xFFF)));
-                            VM::Manager::the().MapPage(VM::Manager::the().GetPhysical((faulting & ~(0xFFF))), (faulting & ~(0xFFF)), 0b111);
+                            VM::MapPage(VM::GetPhysical((faulting & ~(0xFFF))), (faulting & ~(0xFFF)), 0b111);
                             return;
                         }
                         // We found a page, copy it
-                        uint64_t new_phys = PM::Manager::the().AllocatePages();
+                        uint64_t new_phys = PM::AllocatePages();
                         // We temp map this new page to the 0 page, as it is otherwise guaranteed to never be mapped
-                        VM::Manager::the().MapPage(new_phys, 0, 0b11);
+                        VM::MapPage(new_phys, 0, 0b11);
                         // Now we can copy the faulting page to the new page
                         memcopy((void*)(faulting & ~(0xFFF)), (void*)0, 0x1000);
                         // We now replace the mapping and unmap the 0 page
-                        VM::Manager::the().MapPage(0, 0, 0);
-                        VM::Manager::the().MapPage(new_phys, (faulting & ~(0xFFF)), 0b111);
+                        VM::MapPage(0, 0, 0);
+                        VM::MapPage(new_phys, (faulting & ~(0xFFF)), 0b111);
                         return;
                     }
                 }

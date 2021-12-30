@@ -157,10 +157,10 @@ int IDEDevice::read(int id, void* buf, size_t len, size_t offset) {
     uint64_t first_sector_offset = offset % 512;
     int64_t len_to_go = (int64_t)len;
     // Allocate memory for the sectors
-    // TODO: maybe allocate this using VM::Manager?
+    // TODO: maybe allocate this using VM::?
     uint16_t* buffer;
     if((sector_count * 512) > 4096) {
-        buffer = (uint16_t*)VM::Manager::the().AllocatePages(((sector_count * 512) / 4096) + (((sector_count * 512) & 4095) ? 1 : 0));
+        buffer = (uint16_t*)VM::AllocatePages(((sector_count * 512) / 4096) + (((sector_count * 512) & 4095) ? 1 : 0));
     } else {
         buffer = new uint16_t[sector_count * 256];
     }
@@ -187,7 +187,7 @@ int IDEDevice::read(int id, void* buf, size_t len, size_t offset) {
     // Memcopy the data we want
     memcopy((buffer) + first_sector_offset, buf, len);
     if((sector_count * 512) > 4096) {
-        VM::Manager::the().FreePages(buffer);
+        VM::FreePages(buffer);
     } else {
         delete buffer;
     }

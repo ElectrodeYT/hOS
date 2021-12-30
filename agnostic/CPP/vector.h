@@ -70,6 +70,13 @@ public:
     // Get the size.
     size_t size() { return _size; }
 
+    // Clear the vector, free the allocations and set capacity to 0
+    void clear_and_free() {
+        _capacity = 0;
+        free(array);
+        array = NULL;
+    }
+
     Vector() {
         _size = 0;
         _capacity = 0;

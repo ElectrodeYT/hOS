@@ -1,91 +1,157 @@
 #include <mem.h>
 #include <mem/PM/physalloc.h>
+#include <mem/VM/virtmem.h>
+#include <CPP/string.h>
 #include <debug/klog.h>
 #include <panic.h>
+#include <early-boot.h>
+
+#define BIT(b, x) ((b[(x)/8] & (1<<((x)%8))))
+#define BIT_I(i, x) (i & (1 << x))
 
 namespace Kernel {
 
 namespace PM {
-    void Manager::Init(physmem_ll* memmap) {
-        memory_map = memmap;
-        // Traverse the list
-        physmem_ll* curr = memmap;
-        while(curr != NULL) {
-            // If the memory region is usable, create a PMObject for it
-            if(curr->type != PHYSMEM_LL_TYPE_USEABLE) { curr = curr->next; continue; }
-            PMObject* object = new PMObject;
-            object->allocated = false;
-            object->base = curr->base;
-            object->size = (curr->size & 0xFFFFFFFFFFFFF000);
-            physicalmemory.push_back(object);
+    mutex_t mutex;
+
+    struct descriptors {
+        uint64_t base;
+        uint64_t size;
+        uint64_t hint_offset; // Used to speed up most allocs
+        descriptors* next;
+    }__attribute__((packed));
+
+    descriptors* pages;
+    uint64_t virtual_offset = 0;
+
+    void Init(stivale2_struct_tag_memmap* memmap, uint64_t hddm_offset) {
+        virtual_offset = hddm_offset;
+        // Get the biggest contigous segemnt
+        uint64_t biggest_base = 0;
+        uint64_t biggset_size = 0;
+        for(size_t i = 0; i < memmap->entries; i++) {
+            if(memmap->memmap[i].type == STIVALE2_MMAP_USABLE) {
+                // Check if this is bigger
+                if(memmap->memmap[i].length > biggset_size) {
+                    // New biggest
+                    biggest_base = memmap->memmap[i].base;
+                    biggset_size = memmap->memmap[i].length;
+                }
+            }
+        }
+        if(!biggset_size) {
+            stivale2_term_write("failed to initialize pm: memmap does not contain any valid usabale entries\n");
+            for(;;);
+        }
+        // Great, make this the base of the descriptors
+        // Add the virtual offset first though
+        pages = (descriptors*)(biggest_base + virtual_offset);
+        descriptors* curr = NULL;
+        uint64_t current_descriptor_length = 0;
+        for(size_t i = 0; i < memmap->entries; i++) {
+            if(memmap->memmap[i].type == STIVALE2_MMAP_USABLE) {
+                if(memmap->memmap[i].base == biggest_base) { continue; }
+                if(curr == NULL) { curr = pages; } else { curr = curr->next; }
+                // Create a descriptor for this one
+                curr->base = memmap->memmap[i].base;
+                curr->size = memmap->memmap[i].length;
+                // Calculate bitmap size
+                uint64_t bitmap_size = curr->size / 4096;
+                // Zero the bitmap
+                memset(curr + 1, 0, bitmap_size);
+                // Set hint to 0
+                curr->hint_offset = 0;
+                // Calculate next position
+                curr->next = (descriptors*)((uint64_t)(curr) + sizeof(descriptors) + bitmap_size);
+                current_descriptor_length += sizeof(descriptors) + bitmap_size;
+            }
+        }
+        // We went through all of them, now do the biggest one
+        curr = curr->next;
+        curr->base = biggest_base + (((current_descriptor_length) + 4095) & (~(4095)));
+        curr->size = biggset_size - (((current_descriptor_length) + 4095) & (~(4095)));
+        curr->next = 0;
+        curr->hint_offset = 0;
+    }
+
+    void MapPhysical() {
+        descriptors* curr = pages;
+        // Basically just loop through each of the usable memory areas and map them
+        while(curr) {
+            for(uint64_t curr_base = curr->base; curr_base < (curr->base + curr->size); curr_base += 4096) {
+                VM::MapPage(curr_base, curr_base + virtual_offset);
+            }
             curr = curr->next;
         }
     }
 
-    uint64_t Manager::AllocatePages(int count) {
+    inline int64_t CheckAndAllocate(uint64_t* bitmap_entry, descriptors* curr, uint64_t offset, int count, bool hint) {
+        if(__builtin_popcountl(~(*bitmap_entry)) >= count) {
+            // We might be able to squeeze this in, check if we can get this in
+            int current_block = 0;
+            int current_block_pos = 0;
+            for(size_t i = 0; i < 64; i++) {
+                if(BIT_I(*bitmap_entry, i)) {
+                    current_block = 0;
+                    current_block_pos = i + 1;
+                } else {
+                    current_block++;
+                }
+                // Check if we have a block thats big enough
+                if(current_block >= count) {
+                    // Ladies and gentlemen, we got em
+                    // Set these bits as used
+                    *bitmap_entry |= ((1 << current_block) - 1) << current_block_pos;
+                    // Calculate offset
+                    uint64_t addr = curr->base + (((offset * 64) + current_block_pos) * 4096);
+                    // Check if the hint is now full
+                    if(hint && *bitmap_entry == 0xFFFFFFFFFFFFFFFF) {
+                        // This hint is full, check if we can move it
+                        if(curr->size < ((curr->hint_offset + 1) * 64 * 4096)) {
+                            curr->hint_offset++;
+                        }
+                    }
+                    return addr;
+                }
+            }
+        }
+        return -1;
+    }
+
+    uint64_t AllocatePages(int count) {
         // Acquire physical memory mutex
         acquire(&mutex);
-        size_t byte_count = count * 4096;
-        // Look through the vector to find unallocated pages
-        for(size_t i = 0; i < physicalmemory.size(); i++) {
-            PMObject* curr = physicalmemory.at(i);
-            if(curr->allocated == false) {
-                // This is an unallocated page, check if its big enough
-                if(curr->size == byte_count) {
-                    // We got the exact size, change it to allocated and return its base
-                    curr->allocated = true;
-                    // Relase the physical memory mutex
-                    release(&mutex);
-                    return curr->base;
-                }
-                if(curr->size < byte_count) {
-                    // Less, continue
-                    continue;
-                }
-                // Bigger then, we need to split it
-                PMObject* new_object = new PMObject;
-                new_object->allocated = true;
-                new_object->base = curr->base;
-                new_object->size = byte_count;
-                // Change curr's base and size
-                curr->base += byte_count;
-                curr->size -= byte_count;
-                // Insert new_object at current position
-                physicalmemory.insert(i, new_object);
-                // Relase the physical memory mutex
-                release(&mutex);
-                return new_object->base;
+        descriptors* curr = pages;
+        while(curr) {
+            uint64_t* bitmap = (uint64_t*)(curr + 1);
+            // Check the hint
+            int64_t hint_ret = CheckAndAllocate((bitmap + curr->hint_offset), curr, curr->hint_offset, count, true);
+            if(hint_ret != -1) { release(&mutex); return (uint64_t)hint_ret; }
+            // Hint has now failed us, check each uint64_t after the hint first
+            for(size_t i = (curr->hint_offset + 1); i < ((curr->size / 4096) / 64); i++) {
+                int64_t ret = CheckAndAllocate((bitmap + i), curr, i, count, false);
+                if(ret != -1) { release(&mutex); return (uint64_t)ret; }
             }
+            // Now check everything before the hint
+            for(size_t i = 0; i < curr->hint_offset; i++) {
+                int64_t ret = CheckAndAllocate((bitmap + i), curr, i, count, false);
+                if(ret != -1) { release(&mutex); return (uint64_t)ret; }
+            }
+            // Completley failed us, advance to the next entry in the LL
+            curr = curr->next;
         }
-        Debug::Panic("PM::Manager: no memory left!");
+        release(&mutex);
+        Debug::Panic("PM: no memory left!");
     }
 
-    bool Manager::CheckIOSpace(uint64_t phys, uint64_t size) {
-        // TODO: is the physmem mutex needed here?
-        // Iterate through all physical memory mapping
-        uint64_t phys_high = phys + size;
-        physmem_ll* curr = memory_map;
-        while(curr != NULL) {
-            if(curr->type == PHYSMEM_LL_TYPE_USEABLE) {
-                uint64_t mapping_high = curr->base + curr->size;
-                if((phys < mapping_high) && (phys_high > curr->base)) { return false; }
-            }
-        }
+    bool CheckIOSpace(uint64_t phys, uint64_t size) {
         return true;
+        (void)phys; (void)size;
     }
 
-    void Manager::FreePages(uint64_t object) {
+    void FreePages(uint64_t object, int count) {
         acquire(&mutex);
-        for(size_t i = 0; i < physicalmemory.size(); i++) {
-            PMObject* curr = physicalmemory.at(i);
-            if(curr->base == object && curr->allocated == true) {
-                // For reasons we never merge allocated ones, set this as deallocated
-                curr->allocated = false;
-                KLog::the().printf("PM: deallocated %i pages at %x\n\r", curr->size / 4096, curr->base);
-            }
-        }
-        // We couldnt free it, lets just pretend like we could and log it
-        KLog::the().printf("PM: couldnt deallocate page %x, ignoring\n\r", object);
+        KLog::the().printf("PM: couldnt deallocate page %x, count %i, ignoring\n\r", object, count);
         release(&mutex);
     }
 }

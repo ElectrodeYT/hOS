@@ -12,51 +12,52 @@
 #include <kernel-drivers/VFS.h>
 
 namespace Kernel {
-    void kTaskTest(void* arg) {
-        KLog::the().printf("it works!\n\r");
-        KLog::the().printf("Test read from ide drive 0\n\r");
-        BlockDevice* dev = BlockManager::the().GetBlockDevice(0, 0);
-        if(!dev) {
-            KLog::the().printf("BlockManager return null. what the fuck?\n\r");
-        } else {
-            uint8_t* buffer = new uint8_t[1024];
-            dev->read(buffer, 1024, 0);
-            if(buffer[512] == 0x45 && buffer[513] == 0x46 && buffer[514] == 0x49) {
-                KLog::the().printf("EFI seems to be at the start of LBA1. Success!\n\r");
-            }
-            // Try to read EchFS on the first partition
-            BlockDevice* part = BlockManager::the().GetBlockDevice(0, 1);
-            if(!part) {
-                KLog::the().printf("Blockmanager didnt find a first partition. what?\n\r");
-            } else {
-                VFSDriver* drv = new EchFSDriver;
-                drv->block = part;
-                VFS::fs_node* mount = drv->mount();
-                if(!mount) {
-                    KLog::the().printf("EchFSDriver didnt mount\n\r");
-                } else {
-                    KLog::the().printf("finddir(\"hello.txt\"\n\r");
-                    VFS::fs_node* hello = mount->driver->finddir(mount, "hello.txt");
-                    if(!hello) {
-                        KLog::the().printf("finddir returned null\n\r");
+    void kInit2(void* arg) {
+        KLog::the().printf("kInit2: started init");
+        // We mount the first partition we find
+        for(uint64_t mount_device = 0; true; mount_device++) {
+            // Attempt to get the base device
+            // If we can get this, then the device exists
+            BlockDevice* base_dev = BlockManager::the().GetBlockDevice(mount_device, 0);
+            if(base_dev) {
+                // Device exists, try to mount every partition here
+                bool mounted = false;
+                for(size_t part_id = 0; true; part_id++) {
+                    BlockDevice* part_dev = BlockManager::the().GetBlockDevice(mount_device, part_id);
+                    // We only support EchFS Root partitions
+                    EchFSDriver* driver = new EchFSDriver;
+                    driver->block = part_dev;
+                    if(!VFS::the().attemptMountRoot(driver)) {
+                        // Didnt work
+                        delete driver;
                     } else {
-                        // Read hello world lol
-                        char text[13];
-                        memset(text, 0, 13);
-                        uint64_t len_read = mount->driver->read(hello, text, 12, 0);
-                        if(len_read > 0) {
-                            KLog::the().printf("EchFSDriver read len %i: %s\n\r", len_read, text);
-                        }
+                        // Did work, break out
+                        mounted = true;
+                        break;
                     }
                 }
+                if(mounted) { break; }
+            } else {
+                // We have no device left!
+                Debug::Panic("Unable to mount root");
             }
         }
+        // We have mounted root, try to read hello.txt lol
+        VFS::fs_node* root = VFS::the().getRootNode();
+        if(!root) { Debug::Panic("what the fuck 1"); }
+        VFS::fs_node* hello = root->finddir("hello.txt");
+        if(!hello) { Debug::Panic("what the fuck 2"); }
+        char hello_text[50];
+        memset(hello_text, 0, 50);
+        hello->open(true, false);
+        hello->read(hello_text, 50, 0);
+        hello->close();
+        KLog::the().printf("%s\n\r", hello_text);
         for(;;);
         (void)arg;
     }
 
-    void KernelMain(size_t mod_count, uint8_t** modules, uint64_t* module_sizes, char** module_names) {
-        ASSERT(mod_count > 0, "No bootstrap elf loaded as module");
+    void KernelMain() {
         // The main job of KernelMain() is to initalize other important parts of the OS that require a decent enviroment to run in.
         // Alot of stuff here will be in agnostic, with calls into the arch code
         Hardware::Timer::InitTimer();
@@ -77,11 +78,11 @@ namespace Kernel {
         BlockManager::the().ParsePartitions();
 
         // Spawn bootstrap processes
-        for(size_t i = 0; i < mod_count; i++) {
-            Processes::Scheduler::the().CreateProcess(modules[i], module_sizes[i], module_names[i]);
-        }
+        //for(size_t i = 0; i < mod_count; i++) {
+        //    Processes::Scheduler::the().CreateProcess(modules[i], module_sizes[i], module_names[i]);
+        //}
         // Spawn kernel tasks
-        Processes::Scheduler::the().CreateKernelTask(kTaskTest, NULL, 4);
+        Processes::Scheduler::the().CreateKernelTask(kInit2, NULL, 4);
         // Schedule
         Processes::Scheduler::the().FirstSchedule();
         for(;;);

@@ -25,10 +25,10 @@ bool Process::attemptCopyFromUser(uint64_t user_pointer, size_t size, void* dest
     // Check if we actually have a valid mapping
     if(!pointer_valid) { return false; }
     // Switch to process memory
-    uint64_t current_page_table = VM::Manager::the().CurrentPageTable();
-    VM::Manager::the().SwitchPageTables(page_table);
+    uint64_t current_page_table = VM::CurrentPageTable();
+    VM::SwitchPageTables(page_table);
     memcopy((void*)user_pointer, destination, size);
-    VM::Manager::the().SwitchPageTables(current_page_table);
+    VM::SwitchPageTables(current_page_table);
     return true;
 }
 
@@ -50,10 +50,10 @@ bool Process::attemptCopyToUser(uint64_t user_pointer, size_t size, void* source
     // Check if we actually have a valid mapping
     if(!pointer_valid) { return false; }
     // Switch to process memory
-    uint64_t current_page_table = VM::Manager::the().CurrentPageTable();
-    VM::Manager::the().SwitchPageTables(page_table);
+    uint64_t current_page_table = VM::CurrentPageTable();
+    VM::SwitchPageTables(page_table);
     memcopy(source, (void*)user_pointer, size);
-    VM::Manager::the().SwitchPageTables(current_page_table);
+    VM::SwitchPageTables(current_page_table);
     return true;
 }
 

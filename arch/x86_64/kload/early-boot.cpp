@@ -4,40 +4,127 @@
 #include <stddef.h>
 #include <mem/VM/virtmem.h>
 #include <mem.h>
+#include <CPP/string.h>
+#include <stdarg.h>
 
 // Kernel boot stack
 static uint8_t stack[4096];
 
-// Tell stivale2 to make a framebuffer (definetly not copied)
-struct stivale2_header_tag_framebuffer framebuffer_hdr_tag = {
-    // All tags need to begin with an identifier and a pointer to the next tag.
+// Terminal callback. We dont actually handle anything either (lol) so just return
+void stivale2_terminal_callback(uint64_t type, uint64_t, uint64_t, uint64_t) { (void)type; }
+
+// Terminal function pointer for the terminal we got
+void (*stivale2_term_write_ptr)(uint64_t ptr, uint64_t length) = NULL;
+// Wrapper to check if its null or not
+void stivale2_term_puts(const char* str) {
+    // Get string length
+    size_t len = 0;
+    char* curr = (char*)str;
+    while(*curr != '\0') { len++; curr++; }
+    stivale2_term_write_ptr((uint64_t)str, len);
+}
+void stivale2_term_write(const char* fmt, ...) {
+    if(!stivale2_term_write_ptr) {
+        return;
+    }
+    va_list args;
+    va_start(args, fmt);
+    char* ptr = (char*)fmt;
+    // We use a buffer system to improve speed
+    const int char_buf_size = 32;
+    char char_buf[char_buf_size + 1];
+    char* char_buf_ptr = char_buf;
+    while(*ptr != '\0') {
+        if(*ptr == '%') {
+            // Flush buffer
+            if(char_buf != char_buf_ptr) {
+                (*char_buf_ptr) = 0;
+                stivale2_term_puts(char_buf);
+                char_buf_ptr = char_buf;
+            }
+            ptr++;
+            switch(*ptr) {
+                case '\0': return;
+                case 'i':
+                case 'd': {
+                    char buf[32];
+                    itoa(va_arg(args, int), buf, 10);
+                    stivale2_term_puts(buf);
+                    break;
+                }
+                case 'x':
+                case 'X': {
+                    uint64_t i = va_arg(args, uint64_t);
+                    stivale2_term_puts("0x");
+                    char nibbles[17];
+                    nibbles[16] = 0;
+                    for(int nibble = 15; nibble >= 0; nibble--) {
+                        uint8_t val = (i & ((uint64_t)0xF << (nibble * 4))) >> (nibble * 4);
+                        nibbles[15 - nibble] = "0123456789ABCDEF"[val];
+                    }
+                    stivale2_term_puts(nibbles);
+                    break;
+                }
+                case 's': {
+                    stivale2_term_puts(va_arg(args, const char*));
+                    break;
+                }
+                default: continue;
+            }
+            ptr++;
+        } else {
+            (*char_buf_ptr++) = *ptr++;
+            if((char_buf + char_buf_size) == char_buf_ptr) { char_buf[char_buf_size] = 0; stivale2_term_puts(char_buf); char_buf_ptr = char_buf; }
+        }
+    }
+    if(char_buf != char_buf_ptr) {
+        (*char_buf_ptr) = 0;
+        stivale2_term_puts(char_buf);
+    }
+}
+
+
+
+void stivale2_term_init(stivale2_struct_tag_terminal* tag) {
+    if(!tag) {
+        stivale2_term_write_ptr = NULL;
+    }
+    if(tag->term_write) { 
+        stivale2_term_write_ptr = (void (*)(uint64_t, uint64_t))tag->term_write;
+    } else {
+        stivale2_term_write_ptr = NULL;
+    }
+}
+
+// Tell stivale2 to give us a terminal function
+struct stivale2_header_tag_terminal terminal_hdr_tag = {
     .tag = {
-        // Identification constant defined in stivale2.h and the specification.
-        .identifier = STIVALE2_HEADER_TAG_FRAMEBUFFER_ID,
-        // If next is 0, then this marks the end of the linked list of tags.
+        .identifier = STIVALE2_HEADER_TAG_TERMINAL_ID,
         .next = 0
     },
-    // We set all the framebuffer specifics to 0 as we want the bootloader
-    // to pick the best it can.
+    .flags = 1, // we lie here
+    .callback = (uintptr_t)stivale2_terminal_callback,
+};
+
+// Tell stivale2 to make a framebuffer (definetly not copied)
+struct stivale2_header_tag_framebuffer framebuffer_hdr_tag = {
+    .tag = {
+        .identifier = STIVALE2_HEADER_TAG_FRAMEBUFFER_ID,
+        .next = (uintptr_t)&terminal_hdr_tag
+    },
     .framebuffer_width  = 0,
     .framebuffer_height = 0,
-    .framebuffer_bpp    = 0
+    .framebuffer_bpp    = 0,
+    .unused = 0
 };
 
 // Stivale2 header
 struct stivale2_header __attribute__((section(".stivale2hdr"), used)) stivale_hdr = {
-    // The entry_point member is used to specify an alternative entry
-    // point that the bootloader should jump to instead of the executable's
-    // ELF entry point. We do not care about that so we leave it zeroed.
     .entry_point = 0,
-    // Let's tell the bootloader where our stack is.
-    // We need to add the sizeof(stack) since in x86(_64) the stack grows
-    // downwards.
     .stack = (uintptr_t)stack + sizeof(stack),
-    // No flags are currently defined as per spec and should be left to 0.
-    .flags = 0,
-    // This header structure is the root of the linked list of header tags and
-    // points to the first one (and in our case, only).
+    // Enable virtual pointers, PMR, and set deprecated bit 4
+    // Disable fully virtual kernel mappings
+    .flags = (1 << 1) | (1 << 2) | (1 << 4),
     .tags = (uintptr_t)&framebuffer_hdr_tag
 };
 
@@ -149,9 +236,9 @@ void tss_set_rsp0(uint64_t new_stack_top) {
 // This should be done after virtual memory init
 void load_tss() {
     // Allocate the stacks
-    // tss_rsp0 = (uint8_t*)Kernel::VM::Manager::the().AllocatePages(tss_stack_size);
-    tss_rsp1 = (uint8_t*)Kernel::VM::Manager::the().AllocatePages(tss_stack_size);
-    tss_rsp2 = (uint8_t*)Kernel::VM::Manager::the().AllocatePages(tss_stack_size);
+    // tss_rsp0 = (uint8_t*)Kernel::VM::AllocatePages(tss_stack_size);
+    tss_rsp1 = (uint8_t*)Kernel::VM::AllocatePages(tss_stack_size);
+    tss_rsp2 = (uint8_t*)Kernel::VM::AllocatePages(tss_stack_size);
     // Zero out the tss
     memset((void*)&tss, 0x00, sizeof(tss));
     

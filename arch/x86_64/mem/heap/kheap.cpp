@@ -121,7 +121,7 @@ void kheap_init() {
 void kheap_init_spare_area() {
     // Allocate spare ll entry
     spare = NULL;
-    spare = (kheap_ll*)Kernel::VM::Manager::the().AllocatePages((1 * 1024 * 1024) / 4096);
+    spare = (kheap_ll*)Kernel::VM::AllocatePages((1 * 1024 * 1024) / 4096);
     if(!spare) { Kernel::Debug::Panic("failed to allocate kheap spare area"); }
     spare->next = NULL;
     spare->size = (1 * 1024 * 1024) - sizeof(kheap_ll);

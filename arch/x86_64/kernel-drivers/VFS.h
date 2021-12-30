@@ -13,14 +13,15 @@ class VFSDriver;
 
 class VFS {
 public:
-    
-
-
     static VFS& the() {
         static VFS instance;
         return instance;
     }
-
+    // POSIX dirent
+    struct dirent {
+        char name[128];
+        uint32_t inode;
+    };
     struct fs_node {
         char* name;
         uint32_t mask; // Permissions mask
@@ -38,13 +39,20 @@ public:
         #define FS_NODE_MOUNT 0x80
         VFSDriver* driver; // Driver instance for this node
         size_t open_count; // Amount of times this file has been opened
+
+        // TODO: make these inline
+        // Thanks C++ compiler
+        int read(void* buf, size_t size, size_t offset);
+        int write(void* buf, size_t size, size_t offset);
+        int open(bool _read, bool _write);
+        int close();
+        VFS::dirent* readdir(size_t num);
+        VFS::fs_node* finddir(const char* name);
     };
 
-    // POSIX dirent
-    struct dirent {
-        char name[128];
-        uint32_t inode;
-    };
+    bool attemptMountRoot(VFSDriver* driver);
+    fs_node* getNodeFromPath(const char* str);
+    fs_node* getRootNode() { return root_node; }
 private:
     // Root file node.
     // Is checked by the end of the kernelmain() function to see if its NULL.
@@ -61,7 +69,9 @@ public:
     virtual VFS::dirent* readdir(VFS::fs_node* node, size_t num) { return NULL; (void)node; (void)num; }
     virtual VFS::fs_node* finddir(VFS::fs_node* node, const char* name) { return NULL; (void)node; (void)name; }
 
-    virtual VFS::fs_node* mount();
+    virtual VFS::fs_node* mount() { return NULL; };
+
+    virtual ~VFSDriver() = default;
 
     BlockDevice* block;
 protected:
@@ -105,7 +115,7 @@ private:
         VFS::fs_node* node;
         uint64_t dir_entry;
         Vector<uint64_t> known_blocks;
-        uint64_t dir_id;
+        uint64_t dir_id; // If this is a directory, this is the id of that dir
         bool opened;
     };
 

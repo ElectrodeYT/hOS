@@ -131,21 +131,21 @@ uint64_t SyscallHandler::mmap(Processes::Process* process, uint64_t requested_si
     for(size_t i = 0; i < process->mappings.size(); i++) {
         // Check if this mapping would overlap with the current map
         // Check low end
-        VM::Manager::VMObject* obj = process->mappings.at(i);
+        VM::VMObject* obj = process->mappings.at(i);
         if((MAX((obj->base + obj->size), (current_map + size)) - MIN(obj->base, current_map)) < ((obj->base + obj->size) - obj->base) + ((current_map + size) - current_map)) {
             if(req_pointer_page) { return -EINVAL; } // Check if this address works
             current_map = obj->base + obj->size;
         }
     }
     // Create new VM Object
-    VM::Manager::VMObject* new_obj = new VM::Manager::VMObject(true, false);
+    VM::VMObject* new_obj = new VM::VMObject(true, false);
     new_obj->base = current_map;
     new_obj->size = size;
     // Actually map the pages
     for(uint64_t curr = 0; curr < size; curr += 4096) {
-        uint64_t phys = PM::Manager::the().AllocatePages(1);
+        uint64_t phys = PM::AllocatePages(1);
         if(!phys) { return -EINVAL; }
-        VM::Manager::the().MapPage(phys, current_map + curr, flags ? 0b111 : 0b101);
+        VM::MapPage(phys, current_map + curr, flags ? 0b111 : 0b101);
     }
     new_obj->write = flags != 0;
     new_obj->read = true;
@@ -163,7 +163,7 @@ uint64_t SyscallHandler::iommap(Processes::Process* process, uint64_t requested_
     // Check if the memory requested is actually a IO space (or, to be more accurate, not a memory space)
     uint64_t size = round_to_page_up(requested_size);
     phys_pointer &= ~(0xFFF);
-    if(!PM::Manager::the().CheckIOSpace(phys_pointer, size)) { return -EINVAL; }
+    if(!PM::CheckIOSpace(phys_pointer, size)) { return -EINVAL; }
     // It is ok, we can map this
     uint64_t current_map = 0x400000;
 
@@ -171,14 +171,14 @@ uint64_t SyscallHandler::iommap(Processes::Process* process, uint64_t requested_
     for(size_t i = 0; i < process->mappings.size(); i++) {
         // Check if this mapping would overlap with the current map
         // Check low end
-        VM::Manager::VMObject* obj = process->mappings.at(i);
+        VM::VMObject* obj = process->mappings.at(i);
         if((MAX((obj->base + obj->size), (current_map + size)) - MIN(obj->base, current_map)) < ((obj->base + obj->size) - obj->base) + ((current_map + size) - current_map)) {
             current_map = obj->base + obj->size;
         }
     }
     // Since this doesnt require deallocation (and i can not be bothered to code saftey into this) we can just map this
     for(uint64_t curr = 0; curr < size; curr += 4096) {
-        VM::Manager::the().MapPage(phys_pointer + curr, current_map + curr, 0b111);
+        VM::MapPage(phys_pointer + curr, current_map + curr, 0b111);
     }
     return current_map;
 }

@@ -3,12 +3,13 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <CPP/vector.h>
+#include <errno.h>
 
 namespace Kernel {
 
 struct BlockDevice {
-    virtual int read(void* buf, size_t len, size_t offset);
-    virtual int write(void* buf, size_t len, size_t offset);
+    virtual int read(void* buf, size_t len, size_t offset) { return -ENOSYS; (void)buf; (void)len; (void)offset; }
+    virtual int write(void* buf, size_t len, size_t offset) { return -ENOSYS; (void)buf; (void)len; (void)offset; }
 
     int block_device_id;
 

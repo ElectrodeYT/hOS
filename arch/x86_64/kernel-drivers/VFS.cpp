@@ -7,6 +7,49 @@
 
 namespace Kernel {
 
+bool VFS::attemptMountRoot(VFSDriver* driver) {
+    if(root_node) { return false; }
+    root_node = driver->mount();
+    if(!root_node) {
+        KLog::the().printf("VFS: couldnt mount root fs\n\r");
+        return false;
+    }
+    return true;
+}
+
+VFS::fs_node* getNodeFromPath(const char* str) {
+    return NULL; // TODO: getNodeFromPath
+    (void)str;
+}
+
+int VFS::fs_node::read(void* buf, size_t size, size_t offset) {
+    if(!driver) { return -EINVAL; }
+    return driver->read(this, buf, size, offset);
+}
+int VFS::fs_node::write(void* buf, size_t size, size_t offset) {
+    if(!driver) { return -EINVAL; }
+    return driver->write(this, buf, size, offset);
+}
+int VFS::fs_node::open(bool _read, bool _write) {
+    if(!driver) { return -EINVAL; }
+    return driver->open(this, _read, _write);
+}
+int VFS::fs_node::close() {
+    if(!driver) { return -EINVAL; }
+    return driver->close(this);
+}
+VFS::dirent* VFS::fs_node::readdir(size_t num) {
+    if(!driver) { return NULL; }
+    return driver->readdir(this, num);
+}
+VFS::fs_node* VFS::fs_node::finddir(const char* name) {
+    if(!driver) { return NULL; }
+    return driver->finddir(this, name);
+}
+
+///
+/// EchFS stuff
+///
 int EchFSDriver::read(VFS::fs_node* node, void* buf, size_t size, size_t offset) {
     if(!mounted) { return -EINVAL; }
     // We cant read a directory lol
@@ -19,6 +62,12 @@ int EchFSDriver::read(VFS::fs_node* node, void* buf, size_t size, size_t offset)
         curr_ll = curr_ll->next;
     }
     if(!file) { return -EINVAL; }
+    // Constrain size
+    if((offset + size) > main_directory_table[file->dir_entry].file_size) {
+        uint64_t new_size = main_directory_table[file->dir_entry].file_size - offset;
+        KLog::the().printf("EchFSDriver: read of size %i constrained to %i\n\r", size, new_size);
+        size = new_size;
+    }
 
     uint64_t end = offset + size;
     // Check if we have the blocks we need buffered
@@ -73,15 +122,31 @@ int EchFSDriver::write(VFS::fs_node* node, void* buf, size_t size, size_t offset
     (void)node; (void)buf; (void)size; (void)offset;
     return -ENOSYS;
 }
+// TODO: does the driver even need to know of the opens and closes?
+// It might if it would flush buffers and things, but we dont do that yet
 int EchFSDriver::open(VFS::fs_node* node, bool _read, bool _write) {
-    if(!mounted) { return -EINVAL; }
-    (void)node; (void)_read; (void)_write;
-    return -ENOSYS;
+    if(!mounted || !node) { return -EINVAL; }
+    node->open_count++;
+    return 0;
+    (void)_read; (void)_write;
 }
 int EchFSDriver::close(VFS::fs_node* node) {
-    if(!mounted) { return -EINVAL; }
-    (void)node; 
-    return -ENOSYS;
+    if(!mounted || !node) { return -EINVAL; }
+    if(node->open_count > 0) { node->open_count--; }
+    else { KLog::the().printf("EchFSDriver: close called with no open FDs"); }
+    // If no one has this file open, we can discard the known blocks vector
+    if(node->open_count == 0) {
+        // Find the echfs_file entry we have for this
+        echfs_file* file = NULL;
+        echfs_file_ll* curr_ll = cached_file_entries;
+        while(curr_ll) {
+            if(curr_ll->file->node == node) { file = curr_ll->file; break; }
+            curr_ll = curr_ll->next;
+        }
+        if(!file) { return 0; } // If we cant find it, then just return
+        file->known_blocks.clear_and_free();
+    }
+    return 0;
 }
 VFS::dirent* EchFSDriver::readdir(VFS::fs_node* node, size_t num) {
     if(!mounted) { return NULL; }
@@ -158,7 +223,7 @@ VFS::fs_node* EchFSDriver::mount() {
     // instead of the kernel heap
     if((allocation_table_block_size * block_size) > (16 * 1024)) {
         KLog::the().printf("EchFSDriver: attempting to allocate %x bytes for the allocation table buffer\n\r", (allocation_table_block_size * block_size));
-        allocation_table = (uint64_t*)VM::Manager::the().AllocatePages((allocation_table_block_size * block_size) / 4096);
+        allocation_table = (uint64_t*)VM::AllocatePages((allocation_table_block_size * block_size) / 4096);
         is_allocation_table_on_heap = false;
     } else {
         KLog::the().printf("EchFSDriver: attempting to allocate %x bytes on the heap for the allocation table buffer\n\r", (allocation_table_block_size * block_size));
@@ -167,7 +232,7 @@ VFS::fs_node* EchFSDriver::mount() {
     }
     if((main_directory_block_size * block_size) > (16 * 1024)) {
         KLog::the().printf("EchFSDriver: attempting to allocate %x bytes for the main dir table buffer\n\r", (main_directory_block_size * block_size));
-        main_directory_table = (echfs_dir_entry*)VM::Manager::the().AllocatePages((main_directory_block_size * block_size) / 4096);
+        main_directory_table = (echfs_dir_entry*)VM::AllocatePages((main_directory_block_size * block_size) / 4096);
         is_main_directory_table_on_heap = false;
     } else {
         KLog::the().printf("EchFSDriver: attempting to allocate %x bytes on the heap for the main dir table buffer\n\r", (main_directory_block_size * block_size));

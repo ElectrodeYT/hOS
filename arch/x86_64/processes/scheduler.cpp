@@ -49,7 +49,7 @@ namespace Kernel {
 
             // Create process
             Process* new_proc = new Process;
-            new_proc->page_table = VM::Manager::the().CreateNewPageTable();
+            new_proc->page_table = VM::CreateNewPageTable();
             new_proc->pid = GetNextPid();
             // Set the parent
             new_proc->parent = 0;
@@ -62,9 +62,9 @@ namespace Kernel {
 
             
             // We want to save the current page table, as we need to switch to it later
-            uint64_t curr_page_table = VM::Manager::the().CurrentPageTable();
+            uint64_t curr_page_table = VM::CurrentPageTable();
             // Switch into new page table
-            VM::Manager::the().SwitchPageTables(new_proc->page_table);
+            VM::SwitchPageTables(new_proc->page_table);
 
             // We now need to loop through all the created segments, and see if we
             // need to make mappings for them
@@ -72,7 +72,7 @@ namespace Kernel {
                 ELF::Section* section = elf.sections.at(i);
                 if(section->loadable) {
                     // TODO: correct permissions
-                    VM::Manager::VMObject* mapping = new VM::Manager::VMObject(true, false);
+                    VM::VMObject* mapping = new VM::VMObject(true, false);
                     mapping->base = section->vaddr & ~(0xFFF);
                     mapping->size = round_to_page_up(section->segment_size);
 
@@ -81,9 +81,9 @@ namespace Kernel {
                     // Allocate it
                     size_t page_count = 0;
                     for(uint64_t i = 0; i < mapping->size; i += 4096) {
-                        uint64_t phys = PM::Manager::the().AllocatePages();
+                        uint64_t phys = PM::AllocatePages();
                         // Map page
-                        VM::Manager::the().MapPage(phys, mapping->base + i, 0b111);
+                        VM::MapPage(phys, mapping->base + i, 0b111);
                         page_count++;
                     }
 
@@ -133,7 +133,7 @@ namespace Kernel {
             // *(uint64_t* volatile)(stack_base + stack_size - 16) = envp_base;
 
             // The sections have been copied out, we can now switch the page table back
-            VM::Manager::the().SwitchPageTables(curr_page_table);
+            VM::SwitchPageTables(curr_page_table);
 
             // Initialize main thread
             Thread* main_thread = new Thread;
@@ -155,8 +155,8 @@ namespace Kernel {
             
             // Create syscall thread stack
             // TODO: guard pages
-            VM::Manager::VMObject* syscall_stack = new VM::Manager::VMObject(true, false);
-            syscall_stack->base = (uint64_t)VM::Manager::the().AllocatePages(4);
+            VM::VMObject* syscall_stack = new VM::VMObject(true, false);
+            syscall_stack->base = (uint64_t)VM::AllocatePages(4);
             syscall_stack->size = 4 * 4096;
             main_thread->syscall_stack_map = syscall_stack;
 
@@ -187,7 +187,7 @@ namespace Kernel {
 
         int Scheduler::CreateKernelTask(void (*start)(void*), void* arg, uint64_t stack_size) {
             Processes::Process* proc = new Processes::Process;
-            proc->page_table = VM::Manager::the().CreateNewPageTable();
+            proc->page_table = VM::CreateNewPageTable();
             proc->is_kernel = true;
             proc->name = new char[8];
             proc->pid = GetNextPid();
@@ -198,7 +198,7 @@ namespace Kernel {
             // Init thread
             Thread* thread = new Processes::Thread;
             thread->stack_size = stack_size * 1024;
-            thread->stack_base = (uint64_t)VM::Manager::the().AllocatePages(stack_size);
+            thread->stack_base = (uint64_t)VM::AllocatePages(stack_size);
             thread->tid = 0;
             thread->regs.page_table = proc->page_table;
             thread->regs.rflags = 0x202;
@@ -227,20 +227,20 @@ namespace Kernel {
             memcopy(curr_proc->name, new_proc->name, name_len);
 
             // Copy the memory mappings over
-            new_proc->page_table = VM::Manager::the().CreateNewPageTable();
-            uint64_t current_table = VM::Manager::the().CurrentPageTable();
+            new_proc->page_table = VM::CreateNewPageTable();
+            uint64_t current_table = VM::CurrentPageTable();
             for(size_t i = 0; i < curr_proc->mappings.size(); i++) {
                 uint64_t* physical_addresses = new uint64_t[curr_proc->mappings.at(i)->size / 4096];
-                VM::Manager::VMObject* new_cow = curr_proc->mappings.at(i)->copyAsCopyOnWrite(physical_addresses);
+                VM::VMObject* new_cow = curr_proc->mappings.at(i)->copyAsCopyOnWrite(physical_addresses);
                 // Now we need to switch to the new page table
-                VM::Manager::the().SwitchPageTables(new_proc->page_table);
+                VM::SwitchPageTables(new_proc->page_table);
                 // Now we need to map all the pages as read only
                 for(size_t x = 0; x < new_cow->size; x += 4096) {
-                    VM::Manager::the().MapPage(physical_addresses[x / 4096], new_cow->base + x, 0b101);
+                    VM::MapPage(physical_addresses[x / 4096], new_cow->base + x, 0b101);
                 }
                 new_proc->mappings.push_back(new_cow);
                 // Switch back
-                VM::Manager::the().SwitchPageTables(current_table);
+                VM::SwitchPageTables(current_table);
                 delete physical_addresses;
             }
 
@@ -271,8 +271,8 @@ namespace Kernel {
 
             // Create syscall thread stack
             // TODO: guard pages
-            VM::Manager::VMObject* syscall_stack = new VM::Manager::VMObject(true, false);
-            syscall_stack->base = (uint64_t)VM::Manager::the().AllocatePages(4);
+            VM::VMObject* syscall_stack = new VM::VMObject(true, false);
+            syscall_stack->base = (uint64_t)VM::AllocatePages(4);
             syscall_stack->size = 4 * 4096;
             main_thread->syscall_stack_map = syscall_stack;
 
@@ -307,7 +307,7 @@ namespace Kernel {
             curr_t->regs.rflags = regs->rflags;
             curr_t->regs.cs = regs->cs;
             curr_t->regs.ss = regs->ss;
-            curr_t->regs.page_table = VM::Manager::the().CurrentPageTable();
+            curr_t->regs.page_table = VM::CurrentPageTable();
         }
 
         void Scheduler::Schedule(Interrupts::ISRRegisters* regs) {
@@ -333,7 +333,7 @@ namespace Kernel {
 
             // Check if this thread should be destroyed
             if(thread->blocked == Thread::BlockState::ShouldDestroy) {
-                VM::Manager::the().FreePages((void*)thread->syscall_stack_map->base);
+                VM::FreePages((void*)thread->syscall_stack_map->base);
                 delete thread;
                 proc->threads.remove(curr_thread);
                 goto begin;
@@ -388,7 +388,7 @@ namespace Kernel {
             if(!proc->is_kernel) { tss_set_rsp0(thread->syscall_stack_map->base + thread->syscall_stack_map->size); }
 
             // Change to process page table
-            VM::Manager::the().SwitchPageTables(thread->regs.page_table);
+            VM::SwitchPageTables(thread->regs.page_table);
             timer_curr = 0;
         }
 
@@ -402,25 +402,25 @@ namespace Kernel {
             for(size_t i = 0; i < proc->threads.size(); i++) {
                 Thread* thread = proc->threads.at(i);
                 if(thread->syscall_stack_map->base) {
-                    VM::Manager::the().FreePages((void*)thread->syscall_stack_map->base);
+                    VM::FreePages((void*)thread->syscall_stack_map->base);
                 }
                 delete thread;
             }
             // Free the physical pages and unmap the process
             // Switch to its page table
-            uint64_t current_page_table = VM::Manager::the().CurrentPageTable();
-            VM::Manager::the().SwitchPageTables(proc->page_table);
+            uint64_t current_page_table = VM::CurrentPageTable();
+            VM::SwitchPageTables(proc->page_table);
             for(size_t i = 0; i < proc->mappings.size(); i++) {
-                VM::Manager::VMObject* obj = proc->mappings.at(i);
+                VM::VMObject* obj = proc->mappings.at(i);
                 if(obj->isShared()) { continue; }
                 for(uint64_t curr = obj->base; curr < obj->size; curr += 4096) {
-                    uint64_t physical = VM::Manager::the().GetPhysical(curr);
-                    PM::Manager::the().FreePages(physical);
+                    uint64_t physical = VM::GetPhysical(curr);
+                    PM::FreePages(physical);
                 }
                 delete obj;
             }
             // The memory this process used has been freed, delete the process itself
-            VM::Manager::the().SwitchPageTables(current_page_table);
+            VM::SwitchPageTables(current_page_table);
             // TODO: destroy page table
             delete proc->name;
             delete proc;
