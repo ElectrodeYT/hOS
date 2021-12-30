@@ -223,7 +223,7 @@ VFS::fs_node* EchFSDriver::mount() {
     // instead of the kernel heap
     if((allocation_table_block_size * block_size) > (16 * 1024)) {
         KLog::the().printf("EchFSDriver: attempting to allocate %x bytes for the allocation table buffer\n\r", (allocation_table_block_size * block_size));
-        allocation_table = (uint64_t*)VM::AllocatePages((allocation_table_block_size * block_size) / 4096);
+        allocation_table = (uint64_t*)VM::AllocatePages(((allocation_table_block_size * block_size) / 4096) + (((allocation_table_block_size * block_size) % 4096) ? 1 : 0));
         is_allocation_table_on_heap = false;
     } else {
         KLog::the().printf("EchFSDriver: attempting to allocate %x bytes on the heap for the allocation table buffer\n\r", (allocation_table_block_size * block_size));
@@ -232,7 +232,7 @@ VFS::fs_node* EchFSDriver::mount() {
     }
     if((main_directory_block_size * block_size) > (16 * 1024)) {
         KLog::the().printf("EchFSDriver: attempting to allocate %x bytes for the main dir table buffer\n\r", (main_directory_block_size * block_size));
-        main_directory_table = (echfs_dir_entry*)VM::AllocatePages((main_directory_block_size * block_size) / 4096);
+        main_directory_table = (echfs_dir_entry*)VM::AllocatePages(((main_directory_block_size * block_size) / 4096) + (((main_directory_block_size * block_size) % 4096) ? 1 : 0));
         is_main_directory_table_on_heap = false;
     } else {
         KLog::the().printf("EchFSDriver: attempting to allocate %x bytes on the heap for the main dir table buffer\n\r", (main_directory_block_size * block_size));
