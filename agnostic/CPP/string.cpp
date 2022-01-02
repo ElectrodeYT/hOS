@@ -30,6 +30,21 @@ char* itoa(long value, char* result, long base) {
     return result;
 }
 
+long atoi(const char* s) {
+    long res = 0;
+    bool neg = false;
+    char* ptr = (char*)s;
+    if(!ptr) { return 0; }
+    if(ptr[0] == '-') { neg = true; ptr++; }
+    while(*ptr) {
+        // Check if we have a valid ascii number digit
+        if(*ptr < 0x30 || *ptr > 0x39) { ptr++; continue; }
+        res = (res * 10) + (*ptr - '0');
+        ptr++;
+    }
+    return res;
+}
+
 long strlen(const char* str) {
     int size = 0;
     char* curr = (char*)str;
