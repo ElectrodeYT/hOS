@@ -73,4 +73,4 @@ clean:
 	@$(MAKE) -C base clean
 
 cloc:
-	@cloc arch/$(ARCH) agnostic base/example base/tiny-libc # ignore mlibc
+	@cloc arch/$(ARCH) agnostic base/example # ignore mlibc
