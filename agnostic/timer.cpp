@@ -15,11 +15,19 @@ namespace Kernel {
             };
 
             static TimercallbackLL* ll = NULL;
+            // TODO: find a way to set the timer to 1000Hz
+            uint64_t kernel_timestamp = 0;
+            
 
             // Gets the current timestamp of the setup timer.
-            int GetCurrentTimeStamp() {
+            int GetCurrentTimerValue() {
                 return ArchTimerValue() / ArchTimerFrequency();
             }
+
+            uint64_t GetCurrentTimestamp() {
+                return kernel_timestamp;
+            }
+
             // Resets the timer.
             void ResetTimeStamp() {
                 ArchResetTimer();
@@ -31,6 +39,7 @@ namespace Kernel {
             }
 
             void AgnosticTimerInterrupt() {
+                kernel_timestamp++;
                 // Traverse the linked list and call all of the callbacks
                 TimercallbackLL* curr = ll;
                 while(curr != NULL) {

@@ -42,6 +42,9 @@ namespace Kernel {
         // Gets a physical address
         uint64_t GetPhysical(uint64_t virt);
 
+        // Get the virtual-physical offset
+        uint64_t GetVirtualOffset();
+
         // Virtual class for other VM objects
         struct VMObject {
             VMObject(bool a, bool s) : _allocated(a), _shared(s) { }

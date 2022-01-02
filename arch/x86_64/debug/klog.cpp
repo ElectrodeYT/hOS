@@ -52,6 +52,12 @@ void KLog::printf(const char* fmt, ...) {
                     puts(va_arg(args, const char*));
                     break;
                 }
+                case 'c': {
+                    char c = (char)(va_arg(args, int));
+                    char temp_string[2] = { c, 0 };
+                    puts(temp_string);
+                    break;
+                }
                 default: continue;
             }
             ptr++;

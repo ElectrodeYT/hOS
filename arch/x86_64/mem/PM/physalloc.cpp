@@ -15,6 +15,8 @@ namespace Kernel {
 
 namespace PM {
     mutex_t mutex;
+    uint64_t used_pages = 0;
+    uint64_t free_pages = 0;
 
     struct descriptors {
         uint64_t base;
@@ -57,6 +59,7 @@ namespace PM {
                 // Create a descriptor for this one
                 curr->base = memmap->memmap[i].base;
                 curr->size = memmap->memmap[i].length;
+                free_pages += curr->size / 4096;
                 // Calculate bitmap size
                 uint64_t bitmap_size = curr->size / 4096;
                 // Zero the bitmap
@@ -74,6 +77,7 @@ namespace PM {
         curr->size = biggset_size - (((current_descriptor_length) + 4095) & (~(4095)));
         curr->next = 0;
         curr->hint_offset = 0;
+        free_pages += curr->size / 4096;
     }
 
     void MapPhysical() {
@@ -113,6 +117,8 @@ namespace PM {
                             curr->hint_offset++;
                         }
                     }
+                    used_pages += count;
+                    free_pages -= count;
                     return addr;
                 }
             }
@@ -167,6 +173,8 @@ namespace PM {
                 for(int i = 0; i < count; i++) {
                     BIT_CLEAR(bitmap, page_offset + 1);
                 }
+                free_pages += count;
+                used_pages -= count;
                 release(&mutex);
                 return;
             }
@@ -174,6 +182,10 @@ namespace PM {
         }
         release(&mutex);
         KLog::the().printf("PM: couldnt deallocate page %x, count %i, ignoring\n\r", object, count);
+    }
+
+    void PrintMemUsage() {
+        KLog::the().printf("PM: used pages %i, free pages %i, used mem %iMb\n\r", used_pages, free_pages, (used_pages * 4096) / (1024 * 1024));
     }
 }
 

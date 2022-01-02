@@ -16,6 +16,9 @@ namespace Kernel {
         // Check if the memory space passed is a IO area.
         // Basically this returns false if this is a ram region
         bool CheckIOSpace(uint64_t phys, uint64_t size);
+
+        // Dump the current amount of used pages to KLog.
+        void PrintMemUsage();
     }
 }
 #endif

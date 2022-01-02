@@ -38,7 +38,7 @@ namespace Kernel {
             // Load a ELF file.
             // This is used to create "first pids"; Other exec and forks should result from other versions of this process.
             // This initializes argc to 1 and argv to name, and sets env and enc to NULL.
-            int64_t CreateProcess(uint8_t* data, size_t length, const char* name);
+            int64_t CreateProcess(uint8_t* data, size_t length, const char* name, const char* working_dir);
 
             // Create a process as a parent from another process.
             // This copies the enviroment from the parent process.
@@ -102,7 +102,7 @@ namespace Kernel {
 
         private:
             // Implementation of CreateProcess.
-            int64_t CreateProcessImpl(uint8_t* data, size_t length, char** argv, int arc, char** envp, int envc);
+            int64_t CreateProcessImpl(uint8_t* data, size_t length, char** argv, int arc, char** envp, int envc, const char* working_dir);
 
             // Get the next available PID
             int64_t GetNextPid() {

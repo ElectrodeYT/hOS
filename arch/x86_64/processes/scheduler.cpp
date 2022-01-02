@@ -17,7 +17,7 @@ namespace Kernel {
         void Scheduler::Init() {
             // TODO
         }
-        int64_t Scheduler::CreateProcessImpl(uint8_t* data, size_t length, char** argv, int argc, char** envp, int envc) {
+        int64_t Scheduler::CreateProcessImpl(uint8_t* data, size_t length, char** argv, int argc, char** envp, int envc, const char* working_dir) {
             // Sanity checks
             if(!argv) { return -EINVAL; }
             if(!envp) { return -EINVAL; }
@@ -57,6 +57,11 @@ namespace Kernel {
             size_t name_len = strlen(argv[0]);
             new_proc->name = new char[name_len + 1];
             memcopy(argv[0], new_proc->name, name_len + 1);
+
+            size_t working_dir_len = strlen(working_dir);
+            new_proc->working_dir = new char[working_dir_len + 1];
+            memcopy((void*)working_dir, new_proc->working_dir, working_dir_len + 1);
+            
 
             KLog::the().printf("Creating new process %s\r\n", new_proc->name);
 
@@ -170,19 +175,19 @@ namespace Kernel {
             return new_proc->pid;
         }
 
-        int64_t Scheduler::CreateProcess(uint8_t* data, size_t length, const char* name) {
+        int64_t Scheduler::CreateProcess(uint8_t* data, size_t length, const char* name, const char* working_dir) {
             // Create a fake envc, envp
             char* fake_env[1] = { NULL };
             // Create a argv containing only the program name
-            char* argv[1] = { (char*)name };
-            return CreateProcessImpl(data, length, argv, 1, fake_env, 0); // parent = UINT64_MAX; this will make CreateProcessImpl set parent to itself 
+            char* argv[1] = { (char*)name }; 
+            return CreateProcessImpl(data, length, argv, 1, fake_env, 0, working_dir); // parent = UINT64_MAX; this will make CreateProcessImpl set parent to itself 
         }
 
         int64_t Scheduler::CreateProcess(uint8_t* data, size_t length, char** argv, int argc) {
             // We use the envc, envp of the parent
             // TODO: yeah that
             char* fake_env[1] = { NULL };
-            return CreateProcessImpl(data, length, argv, argc, fake_env, 0);
+            return CreateProcessImpl(data, length, argv, argc, fake_env, 0, CurrentProcess()->working_dir);
         }
 
         int Scheduler::CreateKernelTask(void (*start)(void*), void* arg, uint64_t stack_size) {

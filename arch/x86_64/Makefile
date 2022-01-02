@@ -29,6 +29,7 @@ create-image $(image): $(kernel)
 	@echfs-utils -g -p0 $(image) import ../../sysroot/testa.elf testa.elf
 	@echfs-utils -g -p0 $(image) import ../../sysroot/testb.elf testb.elf
 	@echfs-utils -g -p0 $(image) import ../../sysroot/hello.txt hello.txt
+	@echfs-utils -g -p0 $(image) import ../../sysroot/dev/internal-kernel-mountpoint.txt dev/internal-kernel-mountpoint.txt
 	@limine-install $(image)
 
 qemu: $(image)

@@ -74,61 +74,6 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     // Initialize virtual memory
     Kernel::VM::Init(memmap_tag, hhdm_tag->addr);
 
-/*     // Test the PM
-    // Basically we allocate a bunch of pages (~100, but not too many) and record the last page
-    // Due to how the memory layout is most likely arranged (at leas on qemu) the descriptors should be arranged
-    // according to their base values
-    uint64_t last_allocated_page = 0;
-    for(size_t i = 0; i < 100; i++) {
-        uint64_t current = Kernel::PM::AllocatePages();
-        if(last_allocated_page >= current) {
-            Kernel::Debug::SerialPrintf("PM test failed: page %x is lower in the memory space than %x, allocation %i\n\r", current, last_allocated_page, i);
-            for(;;);
-        }
-        last_allocated_page = current;
-    }
-
-    // Test the VM
-    uint64_t* test1 = (uint64_t*)Kernel::VM::AllocatePages(16);
-    uint64_t* test2 = (uint64_t*)Kernel::VM::AllocatePages(16);
-    
-    memset(test1, 0xAB, 16 * 4096);
-    memset(test2, 0xCD, 16 * 4096);
-    const uint64_t test1_mask = 0xABABABABABABABAB;
-    const uint64_t test2_mask = 0xCDCDCDCDCDCDCDCD;
-    for(size_t i = 0; i < ((16 * 4096) / 8); i++) {
-        if(test1[i] != test1_mask) {
-            Kernel::Debug::SerialPrintf("VM test failed: uint64_t %i should be 0xABABABABABABABAB, was %x\n\r", i, test1[i]);
-            for(;;);
-        }
-        if(test2[i] != test2_mask) {
-            Kernel::Debug::SerialPrintf("VM test failed: uint64_t %i should be 0xCDCDCDCDCDCDCDCD, was %x\n\r", i, test2[i]);
-            for(;;);
-        }
-    }
-    Kernel::VM::FreePages(test2);
-    Kernel::VM::FreePages(test1);
-    
-    // Test the kernel heap
-    test1 = new uint64_t[4096];
-    test2 = new uint64_t[4096];
-    memset(test1, 0xAB, 4096 * 8);
-    memset(test2, 0xCD, 4096 * 8);
-    for(size_t i = 0; i < 4096; i++) {
-        if(test1[i] != test1_mask) {
-            Kernel::Debug::SerialPrintf("VM test failed: uint64_t %i should be 0xABABABABABABABAB, was %x\n\r", i, test1[i]);
-            for(;;);
-        }
-        if(test2[i] != test2_mask) {
-            Kernel::Debug::SerialPrintf("VM test failed: uint64_t %i should be 0xCDCDCDCDCDCDCDCD, was %x\n\r", i, test2[i]);
-            for(;;);
-        }
-    }
-
-    delete test2;
-    delete test1; */
-
-
 
     // Call the global constructors
     for (ctor_constructor* ctor = &start_ctors; ctor < &end_ctors; ctor++) {
@@ -141,6 +86,9 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
 
     // We are in a much safer place now; dereferencing null pointers will for example now crash, before it would have been identity mapped to physical memory.
 
+    // Get the not requried fb struct
+    stivale2_struct_tag_framebuffer* fb_tag = (stivale2_struct_tag_framebuffer*)stivale2_get_tag(stivale2_struct, STIVALE2_STRUCT_TAG_FRAMEBUFFER_ID);
+
     // Load the gdt
     load_gdt();
     // Initialize TSS
@@ -150,5 +98,5 @@ extern "C" void _start(struct stivale2_struct *stivale2_struct) {
     Kernel::Interrupts::the().InitInterrupts();
 
     // Basic init has occured, we can call the main now
-    Kernel::KernelMain();
+    Kernel::KernelMain(fb_tag);
 }

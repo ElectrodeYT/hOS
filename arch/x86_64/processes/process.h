@@ -77,6 +77,8 @@ namespace Kernel {
 
             bool attemptCopyFromUser(uint64_t user_pointer, size_t size, void* destination);
             bool attemptCopyToUser(uint64_t user_pointer, size_t size, void* source);
+        
+            char* working_dir;
         };
     }
 }

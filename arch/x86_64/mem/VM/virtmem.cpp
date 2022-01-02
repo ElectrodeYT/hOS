@@ -77,6 +77,8 @@ namespace VM {
         return entry & 0xFFFFFFFFFF000;
     } 
 
+    uint64_t GetVirtualOffset() { return virtual_offset; }
+
     // Create a new page table.
     uint64_t CreateNewPageTable() {
         uint64_t new_table_physical = PM::AllocatePages();

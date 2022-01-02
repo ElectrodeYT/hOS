@@ -10,8 +10,8 @@ namespace Kernel {
             using timer_callback_t = void(*)(void*);
 
             // Platform independent kernel functions
-            int GetCurrentTimeStamp();
-            void ResetTimeStamp();
+            int GetCurrentTimerValue();
+            uint64_t GetCurrentTimestamp();
 
             // Called when a timer interrupt occurs
             void AgnosticTimerInterrupt();

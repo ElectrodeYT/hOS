@@ -10,7 +10,7 @@ namespace Kernel {
 struct BlockDevice {
     virtual int read(void* buf, size_t len, size_t offset) { return -ENOSYS; (void)buf; (void)len; (void)offset; }
     virtual int write(void* buf, size_t len, size_t offset) { return -ENOSYS; (void)buf; (void)len; (void)offset; }
-
+    virtual int ioctl(uint64_t command, void* arg) { return -ENOSYS; (void)command; (void)arg; }
     int block_device_id;
 
     uint64_t len;

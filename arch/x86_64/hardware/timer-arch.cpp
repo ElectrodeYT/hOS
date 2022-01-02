@@ -11,7 +11,8 @@ namespace Kernel {
         namespace Timer {
             const uint8_t channel0 = 0x40;
             const uint8_t mode_command = 0x43;
-
+            int divisor = 1193; // 1000Hz
+                
             void ArchTimerInterrupt(Interrupts::ISRRegisters* registers) {
                 // Call agnostic timer interrupt
                 AgnosticTimerInterrupt();
@@ -26,7 +27,6 @@ namespace Kernel {
                 // Configure channel 0
                 outb(mode_command, 0b00110110); // Channel 0, lo/hi byte, square wave
 
-                int divisor = 2386;
                 outb(channel0, divisor & 0xFF);
                 outb(channel0, (divisor >> 8) & 0xFF);
 
@@ -50,7 +50,7 @@ namespace Kernel {
             }
 
             int ArchTimerFrequency() {
-                return 0;
+                return 1193180 / divisor;
             }
 
             void ArchResetTimer() {

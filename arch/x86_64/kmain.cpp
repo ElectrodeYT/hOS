@@ -5,11 +5,15 @@
 #include <debug/klog.h>
 #include <timer.h>
 #include <mem/VM/virtmem.h>
+#include <mem/PM/physalloc.h>
 #include <processes/scheduler.h>
 #include <kernel-drivers/PCI.h>
 #include <kernel-drivers/IDE.h>
 #include <kernel-drivers/BlockDevices.h>
+#include <kernel-drivers/CharDevices.h>
 #include <kernel-drivers/VFS.h>
+#include <kernel-drivers/PS2.h>
+#include <kernel-drivers/Stivale2GraphicsTerminal.h>
 
 namespace Kernel {
     void kInit2(void* arg) {
@@ -43,30 +47,56 @@ namespace Kernel {
             }
         }
         // We have mounted root, try to read hello.txt lol
-        VFS::fs_node* root = VFS::the().getRootNode();
-        if(!root) { Debug::Panic("what the fuck 1"); }
-        VFS::fs_node* hello = root->finddir("hello.txt");
-        if(!hello) { Debug::Panic("what the fuck 2"); }
-        char hello_text[50];
-        memset(hello_text, 0, 50);
-        hello->open(true, false);
-        hello->read(hello_text, 50, 0);
-        hello->close();
-        KLog::the().printf("%s\n\r", hello_text);
+        PM::PrintMemUsage();
+        int hello_fd = VFS::the().open("/", "hello.txt", -1);
+        if(hello_fd < 0) { KLog::the().printf("what the fuck 1\n\r"); for(;;); }
+        char buf[100];
+        memset(buf, 0, 100);
+        if(VFS::the().pread(hello_fd, buf, 100, 0, -1) < 0) { KLog::the().printf("what the fuck 2\n\r"); for(;;); }
+        PM::PrintMemUsage();
+        KLog::the().printf("%s\n\r", buf);
+        VFS::the().close(hello_fd, -1);
+        
+        //int dev_text_fd = VFS::the().open("/dev", "internal-kernel-mountpoint.txt", -1);
+        //if(dev_text_fd < 0) { KLog::the().printf("what the fuck 3\n\r"); for(;;); }
+        //memset(buf, 0, 100);
+        //if(VFS::the().pread(dev_text_fd, buf, 100, 0, -1) < 0) { KLog::the().printf("what the fuck 3\n\r"); for(;;); }
+        //PM::PrintMemUsage();
+        //KLog::the().printf("%s\n\r", buf);
+        //VFS::the().close(dev_text_fd, -1);
+        
+        // Lets try to launch a elf from vfs
+        PM::PrintMemUsage();
+        int64_t testa_fd = VFS::the().open("/", "testa.elf", -1);
+        if(testa_fd < 0) { KLog::the().printf("what the fuck 3\n\r"); for(;;); }
+        size_t testa_size = VFS::the().size(testa_fd, -1);
+        if(!testa_size) { KLog::the().printf("what the fuck 4\n\r"); for(;;); }
+        uint8_t* testa = new uint8_t[testa_size];
+        VFS::the().pread(testa_fd, testa, testa_size, 0, -1);
+        Processes::Scheduler::the().CreateProcess(testa, testa_size, "testa", "/");
+        PM::PrintMemUsage();
         for(;;);
         (void)arg;
     }
 
-    void KernelMain() {
+    void KernelMain(stivale2_struct_tag_framebuffer* fb) {
         // The main job of KernelMain() is to initalize other important parts of the OS that require a decent enviroment to run in.
-        // Alot of stuff here will be in agnostic, with calls into the arch code
+        // Alot of stuff here will be in agnostic (ideally, unlikely to happen), with calls into the arch code
         Hardware::Timer::InitTimer();
-
-        KLog::the().printf("hello world!\n\r");
-        KLog::the().printf("the number 42: %i\n\r", 42);
 
         // We can now enable interrupts
         asm volatile("sti");
+
+        if(fb) {
+            Stivale2GraphicsTerminal* stivale2_terminal = new Stivale2GraphicsTerminal();
+            if(stivale2_terminal && stivale2_terminal->init(fb)) {
+                stivale2_terminal->Clear();
+                CharDeviceManager::the().RegisterCharDevice(stivale2_terminal);
+            }
+        }
+
+        KLog::the().printf("hello world!\n\r");
+        KLog::the().printf("the number 42: %i\n\r", 42);
 
         // Initialize scheduler
         Processes::Scheduler::the().Init();
@@ -76,6 +106,11 @@ namespace Kernel {
 
         // Read partition tables
         BlockManager::the().ParsePartitions();
+
+        // Init PS2
+        // We have to do this here because of our shitty timing and scheduler
+        // TODO: improve timer/add scheduler sleep support
+        PS2::the().Init();
 
         // Spawn bootstrap processes
         //for(size_t i = 0; i < mod_count; i++) {
