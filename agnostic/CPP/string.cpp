@@ -42,6 +42,7 @@ long atoi(const char* s) {
         res = (res * 10) + (*ptr - '0');
         ptr++;
     }
+    if(neg) { res = -res; }
     return res;
 }
 
