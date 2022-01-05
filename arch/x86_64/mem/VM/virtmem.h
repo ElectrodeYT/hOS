@@ -11,6 +11,26 @@ constexpr uint64_t round_to_page_up(uint64_t addr) {
     return ((addr + 4096 - 1) & ~(4096 - 1));
 }
 
+#define VM_DEBUG_PAGETABLES 0
+
+// Set the page table to a specific table.
+#if defined(VM_DEBUG_PAGETABLES) && VM_DEBUG_PAGETABLES
+#define SwitchPageTables(table) \
+    Kernel::Debug::SerialPrintf("switch page tables from %s: %x\n\r", __builtin_FUNCTION(), (uint64_t)table); \
+    asm volatile("mov %0, %%cr3" : : "r"((uint64_t)table));
+#else
+#define SwitchPageTables(table) \
+    asm volatile("mov %0, %%cr3" : : "r"((uint64_t)table));
+
+#endif
+
+// Various debug defines to quickly patch out / replace VMM features
+// These print to debugserial, as klog might not be initialized yet
+#define VM_FREE 1
+#define VM_LOG_FREE 0
+
+#define VM_LOG_ALLOC 0
+
 namespace Kernel {
     namespace VM {
         // Initialize virtual memory.
@@ -18,9 +38,11 @@ namespace Kernel {
         void Init(stivale2_struct_tag_memmap* memmap, uint64_t hhdm_offset);
 
         // Set the page table to a specific table.
-        [[maybe_unused]] static void SwitchPageTables(uint64_t table) {
-            asm volatile("mov %0, %%cr3" : : "r"(table));
-        }
+        //[[maybe_unused]] static void SwitchPageTables(uint64_t table) {
+        //    asm volatile("mov %0, %%cr3" : : "r"(table));
+        //}
+
+        
 
         // Gets the value of CR3
         uint64_t CurrentPageTable();
@@ -28,8 +50,8 @@ namespace Kernel {
         // Allocate a virtual memory page. Allocated into Kernel memory.
         void* AllocatePages(size_t count = 1);
 
-
-        void FreePages(void* adr);
+        // Frees x pages.
+        void FreePages(void* adr, size_t pages);
 
         // Maps addresses.
         void MapPage(unsigned long phys, unsigned long virt, unsigned long options = 0b11);

@@ -26,6 +26,7 @@ public:
     };
 
     bool attemptMountRoot(VFSDriver* driver);
+    int attemptMountOnFolder(const char* working, const char* folder, VFSDriver* driver);
     int64_t open(const char* working, const char* file, int64_t pid);
     int close(int64_t file, int64_t pid);
     int pread(int64_t file, void* buf, size_t nbyte, size_t offset, int64_t pid);
@@ -69,10 +70,13 @@ public:
         }
     };
 private:
+
     struct fileDescriptor {
         int64_t id;
         int64_t pid;
         fs_node* node;
+
+        int64_t seek;
     };
 
     Vector<fileDescriptor*> opened_files;
@@ -184,8 +188,18 @@ public:
     VFS::fs_node* finddir(VFS::fs_node* node, const char* name) override;
 
     VFS::fs_node* mount() override;
-private:
 
+    const char* driverName() override { return "DevFS"; }
+private:
+    struct ttyContainer {
+        int tty_id;
+        VFS::fs_node* node;
+    };
+
+    Vector<ttyContainer*> tty_nodes;
+    mutex_t mutex;
+
+    uint64_t tty_bitmask = (1ULL << 32);
 };
 
 }

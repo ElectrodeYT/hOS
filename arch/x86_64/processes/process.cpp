@@ -26,9 +26,9 @@ bool Process::attemptCopyFromUser(uint64_t user_pointer, size_t size, void* dest
     if(!pointer_valid) { return false; }
     // Switch to process memory
     uint64_t current_page_table = VM::CurrentPageTable();
-    VM::SwitchPageTables(page_table);
+    SwitchPageTables(page_table);
     memcopy((void*)user_pointer, destination, size);
-    VM::SwitchPageTables(current_page_table);
+    SwitchPageTables(current_page_table);
     return true;
 }
 
@@ -51,9 +51,9 @@ bool Process::attemptCopyToUser(uint64_t user_pointer, size_t size, void* source
     if(!pointer_valid) { return false; }
     // Switch to process memory
     uint64_t current_page_table = VM::CurrentPageTable();
-    VM::SwitchPageTables(page_table);
+    SwitchPageTables(page_table);
     memcopy(source, (void*)user_pointer, size);
-    VM::SwitchPageTables(current_page_table);
+    SwitchPageTables(current_page_table);
     return true;
 }
 

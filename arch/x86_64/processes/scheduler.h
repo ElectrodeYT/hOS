@@ -128,6 +128,8 @@ namespace Kernel {
 
             bool running_proc_killed = false;
             bool running_thread_killed = false;
+
+            mutex_t mutex = 0;
         };
         void SchedulerIRQCallbackWrapper(Interrupts::ISRRegisters* regs);
     }

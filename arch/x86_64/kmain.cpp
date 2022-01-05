@@ -46,24 +46,21 @@ namespace Kernel {
                 Debug::Panic("Unable to mount root");
             }
         }
+        // Try to mount devfs
+        DevFSDriver* devfs = new DevFSDriver;
+        VFS::the().attemptMountOnFolder("/", "dev", devfs);
+
         // We have mounted root, try to read hello.txt lol
         PM::PrintMemUsage();
         int hello_fd = VFS::the().open("/", "hello.txt", -1);
         if(hello_fd < 0) { KLog::the().printf("what the fuck 1\n\r"); for(;;); }
-        char buf[100];
-        memset(buf, 0, 100);
-        if(VFS::the().pread(hello_fd, buf, 100, 0, -1) < 0) { KLog::the().printf("what the fuck 2\n\r"); for(;;); }
+        size_t hello_size = VFS::the().size(hello_fd, -1);
+        char* buf = new char[hello_size + 1];
+        memset(buf, 0, hello_size + 1);
+        if(VFS::the().pread(hello_fd, buf, hello_size, 0, -1) < 0) { KLog::the().printf("what the fuck 2\n\r"); for(;;); }
         PM::PrintMemUsage();
-        KLog::the().printf("%s\n\r", buf);
+        // KLog::the().printf("%s\n\r", buf);
         VFS::the().close(hello_fd, -1);
-        
-        //int dev_text_fd = VFS::the().open("/dev", "internal-kernel-mountpoint.txt", -1);
-        //if(dev_text_fd < 0) { KLog::the().printf("what the fuck 3\n\r"); for(;;); }
-        //memset(buf, 0, 100);
-        //if(VFS::the().pread(dev_text_fd, buf, 100, 0, -1) < 0) { KLog::the().printf("what the fuck 3\n\r"); for(;;); }
-        //PM::PrintMemUsage();
-        //KLog::the().printf("%s\n\r", buf);
-        //VFS::the().close(dev_text_fd, -1);
         
         // Lets try to launch a elf from vfs
         PM::PrintMemUsage();
@@ -75,6 +72,15 @@ namespace Kernel {
         VFS::the().pread(testa_fd, testa, testa_size, 0, -1);
         Processes::Scheduler::the().CreateProcess(testa, testa_size, "testa", "/");
         PM::PrintMemUsage();
+        delete testa;
+        VFS::the().close(testa_fd, -1);
+
+        // Try to write to /dev/tty1 manually lol
+        int64_t tty1 = VFS::the().open("/", "dev/tty1", -1);
+        if(tty1 < 0) { KLog::the().printf("what the fuck 5\n\r"); for(;;); }
+        // const char* msg = "Hello World, from VFS!\n";
+        VFS::the().pwrite(tty1, (void*)buf, strlen(buf), 0, -1);
+
         for(;;);
         (void)arg;
     }

@@ -24,8 +24,65 @@ bool VFS::attemptMountRoot(VFSDriver* driver) {
     if(!root_node) {
         return false;
     }
-    KLog::the().printf("VFS: mounted driver %s as root\n\r", driver->driverName());
+    KLog::the().printf("VFS: mounted %s as root\n\r", driver->driverName());
     return true;
+}
+
+int VFS::attemptMountOnFolder(const char* working, const char* folder, VFSDriver* driver) {
+    fs_node* curr = root_node;
+    // Check if we have a relative path
+    if(folder[0] != '/') {
+        // We need to iterate over the working path first
+        if(working[0] != '/') { return -EINVAL; }
+        char* curr_folder_name = NULL;
+        char* curr_working_index = (char*)(working + 1);
+        while(*curr_working_index) {
+            // Get the size of this file name
+            size_t char_len = getLenUntilEndOfPathPart(curr_working_index);
+            if(char_len > 256) { return -ENAMETOOLONG; }
+            curr_folder_name = new char[char_len + 1];
+            memset(curr_folder_name, 0, char_len + 1);
+            memcopy(curr_working_index, curr_folder_name, char_len);
+            fs_node* next = curr->finddir(curr_folder_name);
+            delete curr_folder_name;
+            if(!next) { return -EINVAL; }
+            if(!next->isDir()) { return -ENOTDIR; }
+            curr = next;
+            curr_working_index += char_len;
+        }
+    }
+    // Iterate over the file relative path
+    char* curr_folder_name = NULL;
+    char* curr_file_index = (char*)folder;
+    if(*curr_file_index == '/') { curr_file_index++; }
+    while(*curr_file_index) {
+        if(!curr->isDir()) { return -ENOTDIR; }
+        // Get the size of this file name
+        size_t char_len = getLenUntilEndOfPathPart(curr_file_index);
+        if(char_len > 256) { return -ENAMETOOLONG; }
+        curr_folder_name = new char[char_len + 1];
+        memset(curr_folder_name, 0, char_len + 1);
+        memcopy(curr_file_index, curr_folder_name, char_len);
+        fs_node* next = root_node->finddir(curr_folder_name);
+        delete curr_folder_name;
+        if(!next) { return -EINVAL; }
+        curr = next;
+        curr_file_index += char_len;
+    }
+    if(!curr->isDir()) { return false; }
+    fs_node* mount = driver->mount();
+    if(mount) {
+        // We can mount this driver, overwrite the curr node
+        memcopy(mount, curr, sizeof(fs_node));
+        if(*folder == '/') { folder++; }
+        if(working[1]) {
+            KLog::the().printf("VFS: mounted %s on %s/%s\n\r", driver->driverName(), working, folder);
+        } else {
+            KLog::the().printf("VFS: mounted %s on /%s\n\r", driver->driverName(), folder);    
+        }
+        return true;
+    }
+    return false;
 }
 
 int64_t VFS::open(const char* working, const char* file, int64_t pid) {
@@ -50,6 +107,10 @@ int64_t VFS::open(const char* working, const char* file, int64_t pid) {
             if(!next->isDir()) { return -ENOTDIR; }
             curr = next;
             curr_working_index += char_len;
+            if(*curr_working_index == '/') {
+                if(!curr->isDir()) { return -ENOTDIR; }
+                curr_working_index++;
+            }
         }
     }
     // Iterate over the file relative path
@@ -65,11 +126,15 @@ int64_t VFS::open(const char* working, const char* file, int64_t pid) {
         curr_folder_name = new char[char_len + 1];
         memset(curr_folder_name, 0, char_len + 1);
         memcopy(curr_file_index, curr_folder_name, char_len);
-        fs_node* next = root_node->finddir(curr_folder_name);
+        fs_node* next = curr->finddir(curr_folder_name);
         delete curr_folder_name;
         if(!next) { return -EINVAL; }
         curr = next;
         curr_file_index += char_len;
+        if(*curr_file_index == '/') {
+            if(!curr->isDir()) { return -ENOTDIR; }
+            curr_file_index++;
+        }
     }
     if(curr->isDir()) { return -EISDIR; }
     // Create a new file descriptor for this file
@@ -82,6 +147,7 @@ int64_t VFS::open(const char* working, const char* file, int64_t pid) {
     fd->id = file_desc;
     fd->pid = pid;
     fd->node = curr;
+    fd->seek = 0;
     opened_files.push_back(fd);
     release(&mutex);
     return file_desc;
@@ -109,6 +175,7 @@ int VFS::close(int64_t file, int64_t pid) {
 int VFS::pread(int64_t file, void* buf, size_t nbyte, size_t offset, int64_t pid) {
     // Find the fd
     fs_node* node = NULL;
+    fileDescriptor* fd = NULL;
     for(size_t i = 0; i < opened_files.size(); i++) {
         if(opened_files.at(i)->id == file) {
             // If we are not the kernel (pid -1) then we also check the pid
@@ -116,16 +183,20 @@ int VFS::pread(int64_t file, void* buf, size_t nbyte, size_t offset, int64_t pid
                 return -EBADF;
             }
             node = opened_files.at(i)->node;
+            fd = opened_files.at(i);
             break;
         }
     }
     if(!node) { return -EBADF; }
-    return node->read(buf, nbyte, offset);
+    int ret = node->read(buf, nbyte, offset + fd->seek);
+    if(ret > 0) { fd->seek += ret; }
+    return ret;
 }
 
 int VFS::pwrite(int64_t file, void* buf, size_t nbyte, size_t offset, int64_t pid) {
     // Find the fd
     fs_node* node = NULL;
+    fileDescriptor* fd = NULL;
     for(size_t i = 0; i < opened_files.size(); i++) {
         if(opened_files.at(i)->id == file) {
             // If we are not the kernel (pid -1) then we also check the pid
@@ -133,11 +204,14 @@ int VFS::pwrite(int64_t file, void* buf, size_t nbyte, size_t offset, int64_t pi
                 return -EBADF;
             }
             node = opened_files.at(i)->node;
+            fd = opened_files.at(i);
             break;
         }
     }
     if(!node) { return -EBADF; }
-    return node->write(buf, nbyte, offset);
+    int ret = node->write(buf, nbyte, offset + fd->seek);
+    if(ret > 0) { fd->seek += ret; }
+    return ret;
 }
 
 size_t VFS::size(int64_t file, int64_t pid) {
@@ -487,6 +561,86 @@ void EchFSDriver::dumpMainDirectory() {
 ///
 /// DevFS stuff
 ///
+// The read, write, open and close functions will only ever be called on the rootfs
+// the VFS::fs_node functions deal with reading/writing to block/char devices
+int DevFSDriver::read(VFS::fs_node* node, void* buf, size_t size, size_t offset) {
+    return -EISDIR;
+    (void)node; (void)buf; (void)size; (void)offset;
+}
 
+int DevFSDriver::write(VFS::fs_node* node, void* buf, size_t size, size_t offset) {
+    return -EISDIR;
+    (void)node; (void)buf; (void)size; (void)offset;
+}
+
+int DevFSDriver::open(VFS::fs_node* node, bool read, bool write) {
+    return -EISDIR;
+    (void)node; (void)read; (void)write;
+}
+
+int DevFSDriver::close(VFS::fs_node* node) {
+    return -EISDIR;
+    (void)node;
+}
+
+VFS::dirent* DevFSDriver::readdir(VFS::fs_node* node, size_t num) {
+    acquire(&mutex);
+    (void)node; (void)num;
+    release(&mutex);
+    return NULL;
+}
+
+VFS::fs_node* DevFSDriver::finddir(VFS::fs_node* node, const char* name) {
+    acquire(&mutex);
+    // we dont have subdirs
+    if(node->inode != 0xFFFFFFFFFFFFFFFF || !(node->isDir())) { return NULL; }
+    // in any case, name must be at least 3 chars
+    size_t name_len = strlen(name);
+    if(name_len < 3) { return NULL; }
+    // check the name
+    if(name[0] == 't' && name[1] == 't' && name[2] == 'y' ) {
+        // we still need a number, new length minimum is 4
+        if(name_len < 4) { return NULL; }
+        const char* number_part = (name + 3);
+        long tty_id = atoi(number_part);
+        if(tty_id <= 0) { return NULL; }
+        tty_id--;
+        // Check if a tty for this even exists
+        if(!CharDeviceManager::the().get(tty_id)) { return NULL; }
+        // Attempt to get the tty for this
+        for(size_t i = 0; i < tty_nodes.size(); i++) {
+            if(tty_nodes.at(i)->tty_id == tty_id) { 
+                VFS::fs_node* node = tty_nodes.at(i)->node;
+                release(&mutex);
+                return node;
+            }
+        }
+        // We dont have a node for this, make one
+        ttyContainer* container = new ttyContainer;
+        container->tty_id = tty_id;
+        container->node = new VFS::fs_node;
+        container->node->inode = tty_id | tty_bitmask;
+        container->node->flags = FS_NODE_CHARDEVICE;
+        container->node->driver = this;
+        container->node->block_char_dev_id = tty_id;
+        container->node->block_dev_part_id = 0;
+        tty_nodes.push_back(container);
+        release(&mutex);
+        return container->node;
+    }
+    release(&mutex);
+    return NULL;
+}
+
+VFS::fs_node* DevFSDriver::mount() {
+    // We just create a special directory inode for this lol
+    root_node = new VFS::fs_node;
+    root_node->driver = this;
+    root_node->flags = FS_NODE_DIR | FS_NODE_MOUNT;
+    root_node->inode = 0xFFFFFFFFFFFFFFFF;
+    root_node->uid = 0;
+    root_node->gid = 0;
+    return root_node;
+}
 
 }

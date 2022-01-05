@@ -187,7 +187,7 @@ int IDEDevice::read(int id, void* buf, size_t len, size_t offset) {
     // Memcopy the data we want
     memcopy((buffer) + first_sector_offset, buf, len);
     if((sector_count * 512) > 4096) {
-        VM::FreePages(buffer);
+        VM::FreePages(buffer, ((sector_count * 512) / 4096) + (((sector_count * 512) & 4095) ? 1 : 0));
     } else {
         delete buffer;
     }

@@ -9,4 +9,8 @@
 void* kheap_alloc(size_t size);
 void kheap_free(void* adr);
 
+// Heap debug defines
+#define KHEAP_LOG_PAGE_ALLOC 0
+#define KHEAP_LOG_PAGE_FREE 0
+
 #endif

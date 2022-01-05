@@ -18,6 +18,7 @@ namespace Kernel {
             // TODO
         }
         int64_t Scheduler::CreateProcessImpl(uint8_t* data, size_t length, char** argv, int argc, char** envp, int envc, const char* working_dir) {
+            acquire(&mutex);
             // Sanity checks
             if(!argv) { return -EINVAL; }
             if(!envp) { return -EINVAL; }
@@ -69,7 +70,7 @@ namespace Kernel {
             // We want to save the current page table, as we need to switch to it later
             uint64_t curr_page_table = VM::CurrentPageTable();
             // Switch into new page table
-            VM::SwitchPageTables(new_proc->page_table);
+            SwitchPageTables(new_proc->page_table);
 
             // We now need to loop through all the created segments, and see if we
             // need to make mappings for them
@@ -138,7 +139,7 @@ namespace Kernel {
             // *(uint64_t* volatile)(stack_base + stack_size - 16) = envp_base;
 
             // The sections have been copied out, we can now switch the page table back
-            VM::SwitchPageTables(curr_page_table);
+            SwitchPageTables(curr_page_table);
 
             // Initialize main thread
             Thread* main_thread = new Thread;
@@ -165,13 +166,16 @@ namespace Kernel {
             syscall_stack->size = 4 * 4096;
             main_thread->syscall_stack_map = syscall_stack;
 
-
+            // Initialize process FD table
+            new_proc->fd_translation_table = new Vector<Process::VFSTranslation>;
+            new_proc->fd_translation_table_ref_count = new int;
 
             // Attach thread to new process
             new_proc->threads.push_back(main_thread);
 
             // Add process
             processes.push_back(new_proc);
+            release(&mutex);
             return new_proc->pid;
         }
 
@@ -191,6 +195,7 @@ namespace Kernel {
         }
 
         int Scheduler::CreateKernelTask(void (*start)(void*), void* arg, uint64_t stack_size) {
+            acquire(&mutex);
             Processes::Process* proc = new Processes::Process;
             proc->page_table = VM::CreateNewPageTable();
             proc->is_kernel = true;
@@ -213,14 +218,23 @@ namespace Kernel {
             thread->regs.rdi = (uint64_t)arg;
             thread->regs.rsp = thread->stack_base + thread->stack_size;
             thread->blocked = Thread::BlockState::Running;
+            
+            // Create interrupt stack
+            VM::VMObject* intr_stack = new VM::VMObject(true, false);
+            intr_stack->base = (uint64_t)VM::AllocatePages(4);
+            intr_stack->size = 4 * 4096;
+            thread->syscall_stack_map = intr_stack;
+
             // Add thread
             proc->threads.push_back(thread);
             // Add process
             processes.push_back(proc);
+            release(&mutex);
             return proc->pid;
         }
 
         int64_t Scheduler::ForkCurrent(Interrupts::ISRRegisters* regs) {
+            acquire(&mutex);
             // Create new process
             Processes::Process* new_proc = new Processes::Process();
             Processes::Process* curr_proc = CurrentProcess();
@@ -238,16 +252,21 @@ namespace Kernel {
                 uint64_t* physical_addresses = new uint64_t[curr_proc->mappings.at(i)->size / 4096];
                 VM::VMObject* new_cow = curr_proc->mappings.at(i)->copyAsCopyOnWrite(physical_addresses);
                 // Now we need to switch to the new page table
-                VM::SwitchPageTables(new_proc->page_table);
+                SwitchPageTables(new_proc->page_table);
                 // Now we need to map all the pages as read only
                 for(size_t x = 0; x < new_cow->size; x += 4096) {
                     VM::MapPage(physical_addresses[x / 4096], new_cow->base + x, 0b101);
                 }
                 new_proc->mappings.push_back(new_cow);
                 // Switch back
-                VM::SwitchPageTables(current_table);
+                SwitchPageTables(current_table);
                 delete physical_addresses;
             }
+
+            // The forked processes share file descriptors, copy the pointers
+            new_proc->fd_translation_table = curr_proc->fd_translation_table;
+            new_proc->fd_translation_table_ref_count = curr_proc->fd_translation_table_ref_count;
+            *(new_proc->fd_translation_table_ref_count) = *(new_proc->fd_translation_table_ref_count) + 1;
 
             // Create the new thread
             Thread* main_thread = new Thread();
@@ -283,6 +302,7 @@ namespace Kernel {
 
             new_proc->threads.push_back(main_thread);
             processes.push_back(new_proc);
+            release(&mutex);
             return new_proc->pid;
         }
 
@@ -317,7 +337,6 @@ namespace Kernel {
 
         void Scheduler::Schedule(Interrupts::ISRRegisters* regs) {
             running_proc_killed = false;
-            // TODO: Support multiple threads
             // Increment tid
             begin:
             curr_thread++;
@@ -332,13 +351,40 @@ namespace Kernel {
             if(curr_proc >= processes.size()) { curr_proc = 0; curr_thread = 0; }
             Process* proc = processes.at(curr_proc);
             
+            // Check if this process should actually still exist
+            if(proc->attempt_destroy) {
+                // Check if we share a stack with any of the threads
+                // Demap all the stacks and delete all threads
+                bool unmapped_everything = true;
+                for(size_t i = 0; i < proc->threads.size(); i++) {
+                    Thread* thread = proc->threads.at(i);
+                    if(!thread->syscall_stack_map->base) { continue; }
+                    // Check if we are currently using this stack (lol)
+                    uint64_t curr_frame = (uint64_t)__builtin_frame_address(0);
+                    if(thread->syscall_stack_map->base <= curr_frame && (thread->syscall_stack_map->base + thread->syscall_stack_map->size) >= curr_frame) {
+                        unmapped_everything = false;
+                    } else {
+                        VM::FreePages((void*)thread->syscall_stack_map->base, thread->syscall_stack_map->size / 4096);
+                        delete thread;
+                    }
+                }
+                if(unmapped_everything) {
+                    delete proc;
+                    processes.remove(curr_proc);
+                } else {
+                    curr_proc++;
+                    curr_thread = 0;
+                }
+                goto begin_no_increment;
+            }
+
             // Check if we have overflowed the available threads
             if(curr_thread >= proc->threads.size()) { curr_thread = 0; curr_proc++; goto begin_no_increment; }
             Thread* thread = proc->threads.at(curr_thread);
 
             // Check if this thread should be destroyed
             if(thread->blocked == Thread::BlockState::ShouldDestroy) {
-                VM::FreePages((void*)thread->syscall_stack_map->base);
+                VM::FreePages((void*)thread->syscall_stack_map->base, thread->syscall_stack_map->size / 4096);
                 delete thread;
                 proc->threads.remove(curr_thread);
                 goto begin;
@@ -390,10 +436,9 @@ namespace Kernel {
             regs->ss = thread->regs.ss;
 
             // Update TSS RSP0
-            if(!proc->is_kernel) { tss_set_rsp0(thread->syscall_stack_map->base + thread->syscall_stack_map->size); }
-
+            tss_set_rsp0(thread->syscall_stack_map->base + thread->syscall_stack_map->size);
             // Change to process page table
-            VM::SwitchPageTables(thread->regs.page_table);
+            SwitchPageTables(thread->regs.page_table);
             timer_curr = 0;
         }
 
@@ -403,18 +448,10 @@ namespace Kernel {
             // KLog::the().printf("Killing %s\r\n", proc->name);
             uint64_t state = save_irqdisable();
             
-            // Demap all the stacks and delete all threads
-            for(size_t i = 0; i < proc->threads.size(); i++) {
-                Thread* thread = proc->threads.at(i);
-                if(thread->syscall_stack_map->base) {
-                    VM::FreePages((void*)thread->syscall_stack_map->base);
-                }
-                delete thread;
-            }
             // Free the physical pages and unmap the process
             // Switch to its page table
             uint64_t current_page_table = VM::CurrentPageTable();
-            VM::SwitchPageTables(proc->page_table);
+            SwitchPageTables(proc->page_table);
             for(size_t i = 0; i < proc->mappings.size(); i++) {
                 VM::VMObject* obj = proc->mappings.at(i);
                 if(obj->isShared()) { continue; }
@@ -425,11 +462,11 @@ namespace Kernel {
                 delete obj;
             }
             // The memory this process used has been freed, delete the process itself
-            VM::SwitchPageTables(current_page_table);
+            SwitchPageTables(current_page_table);
             // TODO: destroy page table
+            // probably has to be done in scheduler
             delete proc->name;
-            delete proc;
-            processes.remove(curr_proc);
+            proc->attempt_destroy = true;
             running_proc_killed = true;
             // Restart interrupts
             irqrestore(state);
@@ -564,6 +601,7 @@ namespace Kernel {
             
             timer_curr++;
             if(timer_curr >= timer_switch) {
+                if(mutex) { return; } // lol
                 if(first_schedule_complete) {
                     SaveContext(regs);
                 }

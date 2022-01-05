@@ -2,6 +2,7 @@
 #include <mem/VM/virtmem.h>
 #include <mem/PM/physalloc.h>
 #include <panic.h>
+#include <debug/klog.h>
 
 namespace Kernel {
 
@@ -180,26 +181,8 @@ namespace VM {
     uint64_t kernel_page_begin = 0xffffc00000000000;
     const uint64_t kernel_page_end = 0xffffff0000000000;
 
-    // One entry in the vmm_entry_page
-    struct vmm_entry {
-        uint64_t base;
-        uint64_t len;
-        uint8_t state;
-    } __attribute__((packed));
-
-    // A entry describing pages and their states.
-    // One struct does many pages, as this struct is designed
-    // to fit into one physical page
-    // They are accessed by the virtual offset
-    struct vmm_entry_page {
-        vmm_entry_page* next;
-        vmm_entry_page* prev;
-        vmm_entry entries[240];
-    };
-
-    vmm_entry_page* pages;
-    vmm_entry_page* hint;
-    size_t hint_id;
+    // Hint virtual address.
+    uint64_t hint = kernel_page_begin;
 
     static void AllocateAndMap(uint64_t virt, size_t count) {
         for(size_t i = 0; i < count; i++) {
@@ -209,130 +192,67 @@ namespace VM {
         }
     }
 
+    static uint64_t CheckAndAllocate(uint64_t start, uint64_t end, size_t count) {
+        size_t amount_contigous = 0;
+        for(size_t curr = start; start < end; start += 4096)  {
+            if(GetPhysical(curr)) { amount_contigous = 0; continue; }
+            amount_contigous++;
+            if(amount_contigous >= count) {
+                // We have enough
+                #if defined(VM_LOG_ALLOC) && VM_LOG_ALLOC
+                Kernel::Debug::SerialPrintf("[VM]: allocating %i pages at %x\n\r", count, curr);
+                #endif
+                AllocateAndMap(curr, count);
+                return curr;
+            }
+        }
+        return 0;
+    }
+
     void* AllocatePages(size_t count) {
         acquire(&mutex);
-        if(!pages) {
-            // No pages have yet to be allocated, init the page list
-            pages = (vmm_entry_page*)(PM::AllocatePages() + virtual_offset);
-            memset(pages, 0, 4096);
-            pages->entries[0].base = kernel_page_begin;
-            pages->entries[0].len = (kernel_page_end - kernel_page_begin) / 4096;
-            hint = pages;
-            hint_id = 0;
-        }
-        // Check the hint firsst
-        if(hint->entries[hint_id].base && hint->entries[hint_id].state == 0 && hint->entries[hint_id].len >= count) {
-            // Hint is big enough, try to find the next slot that is empty
-            for(size_t i = hint_id + 1; i < 240; i++) {
-                if(hint->entries[i].base == 0) {
-                    // Empty slot found, put the remaining pages in there
-                    uint64_t old_hint_id = hint_id;
-                    if(hint->entries[hint_id].len - count) {
-                        hint->entries[i].base = hint->entries[hint_id].base + (count * 4096);
-                        hint->entries[i].len = hint->entries[hint_id].len - count;
-                        hint->entries[i].state = 0;
-                        // Update hint pointer
-                        hint_id = i;
-                    } else {
-                        // We have (somehow) used the entire memory space, reset hint to the first page
-                        hint = pages;
-                        hint_id = 0;
-                    }
-                    // Set current hint to used
-                    hint->entries[old_hint_id].len = count;
-                    hint->entries[old_hint_id].state = 1;
-
-                    AllocateAndMap(hint->entries[old_hint_id].base, count);
-                    release(&mutex);
-                    return (void*)(hint->entries[old_hint_id].base);
-                }
-            }
-            // Didnt find a empty entry here, see if there is a page afterwards
-            vmm_entry_page* curr_page = hint;
-            while(curr_page->next) {
-                curr_page = curr_page->next;
-                for(size_t i = 0; i < 240; i++) {
-                    if(hint->entries[i].base == 0) {
-                        // Empty slot found, put the remaining pages in there
-                        uint64_t old_hint_id = hint_id;
-                        if(hint->entries[hint_id].len - count) {
-                            hint->entries[i].base = hint->entries[hint_id].base + (count * 4096);
-                            hint->entries[i].len = hint->entries[hint_id].len - count;
-                            hint->entries[i].state = 0;
-                            // Update hint to this page
-                            hint = curr_page;
-                            hint_id = i;
-                        } else {
-                            // We have (somehow) used the entire memory space, reset hint to the first page
-                            hint = pages;
-                            hint_id = 0;
-                        }
-                        // Set current hint to used
-                        hint->entries[old_hint_id].len = count;
-                        hint->entries[old_hint_id].state = 1;
-                        AllocateAndMap(hint->entries[old_hint_id].base, count);
-
-                        release(&mutex);
-                        return (void*)(hint->entries[old_hint_id].base);
-                    }
-                }
-            }
-            // Still havent found a empty slot, create a new page for this
-            curr_page->next = (vmm_entry_page*)(PM::AllocatePages() + virtual_offset);
-            memset(curr_page->next, 0, 4096);
-            uint64_t old_hint_id = hint_id;
-            if(hint->entries[hint_id].len - count) {
-                curr_page->next->entries[0].base = hint->entries[hint_id].base + (count * 4096);
-                curr_page->next->entries[0].len = hint->entries[hint_id].len - count;
-                curr_page->next->entries[0].state = 0;
-                // Update hint to this page
-                hint = curr_page->next;
-                hint_id = 0;
-            } else {
-                // We have (somehow) used the entire memory space, reset hint to the first page
-                hint = pages;
-                hint_id = 0;
-            }
-            // Set current hint to used
-            hint->entries[old_hint_id].len = count;
-            hint->entries[old_hint_id].state = 1;
-            AllocateAndMap(hint->entries[old_hint_id].base, count);
-
+        // Check the hint
+        uint64_t curr = CheckAndAllocate(hint, kernel_page_end, count);
+        if(curr) {
+            hint = curr + (count * 4096);
             release(&mutex);
-            return (void*)(hint->entries[old_hint_id].base);
+            return (void*)curr;
         }
-        // TODO: implement hint failure
-        // Shouldnt really happen, we have so much virtual memory area available
-        Debug::Panic("VM: todo: implement hint fail in AllocatePages()");
+        // Check before the hint
+        curr = CheckAndAllocate(kernel_page_begin, hint, count);
+        if(curr) {
+            hint = curr + (count * 4096);
+            release(&mutex);
+            return (void*)curr;
+        }
+        Debug::Panic("VM: could not find space in the address space");
         release(&mutex);
         return NULL;
     }
 
-    void FreePages(void* adr) {
+    #if defined(VM_FREE) && VM_FREE
+    void FreePages(void* adr, size_t pages) {
+        #if defined(VM_LOG_FREE) && VM_LOG_FREE
+        Kernel::Debug::SerialPrintf("[VM]: deallocating %i pages at %x\n\r", pages, (uint64_t)adr);
+        #endif
         acquire(&mutex);
         // Loop through each page and see if we can find this addr
-        uint64_t addr_int = (uint64_t)adr;
-        vmm_entry_page* curr_pages = pages;
-        while(curr_pages) {
-            for(size_t i = 0; i < 240; i++) {
-                if(curr_pages->entries[i].base == addr_int) {
-                    // Free the pages through the PM
-                    for(size_t y = 0; y < curr_pages->entries[i].len; y++) {
-                        uint64_t phys = GetPhysical(curr_pages->entries[i].base + (y * 4096));
-                        if(phys) { PM::FreePages(phys); }
-                        MapPage(0, curr_pages->entries[i].base + (y * 4096), 0);
-                    }
-                    // Set these to free
-                    curr_pages->entries[i].state = 0;
-                    release(&mutex);
-                    return;
-                }
+        for(uint64_t curr = (uint64_t)adr; curr < ((uint64_t)adr + (pages * 4096)); curr += 4096) {
+            uint64_t phys = GetPhysical(curr);
+            if(!phys) {
+                KLog::the().printf("VM: FreePages() got area with no physical mapping\n\r");
+            } else {
+                PM::FreePages(phys);
             }
+            MapPage(0xDEADA550000, curr, 0);
         }
-        // Couldnt find it, meh
         release(&mutex); 
     }
-
+    #else
+    void FreePages(void*adr) {
+        (void)adr;
+    }
+    #endif
 
 }
 

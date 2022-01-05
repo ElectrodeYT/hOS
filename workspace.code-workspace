@@ -17,7 +17,8 @@
 			"cstdint": "cpp",
 			"typeindex": "cpp",
 			"typeinfo": "cpp",
-			"buffer": "cpp"
+			"buffer": "cpp",
+			"utility": "cpp"
 		}
 	}
 }
