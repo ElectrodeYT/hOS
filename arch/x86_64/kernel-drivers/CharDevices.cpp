@@ -25,7 +25,7 @@ void CharDeviceManager::DestroyCharDevice(int id) {
 }
 
 CharDevice* CharDeviceManager::get(int id) {
-    if(klog_device->char_device_id == id) { return klog_device; }
+    if(klog_device && klog_device->char_device_id == id) { return klog_device; }
     for(size_t i = 0; i < devices.size(); i++) {
         if(devices.at(i)->char_device_id == id) {
             return devices.at(i);
