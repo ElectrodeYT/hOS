@@ -8,8 +8,8 @@ namespace Kernel {
 
 void KLog::printf(const char* fmt, ...) {
     // This printf is very simple, so we dont really care much about it
-    puts("[KLog] ");
     acquire(&mutex);
+    puts("[KLog] ");
     va_list args;
     va_start(args, fmt);
     char* ptr = (char*)fmt;
