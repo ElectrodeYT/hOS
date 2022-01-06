@@ -1,9 +1,10 @@
 clib := tiny-clib
 
 SYSROOT := ../../sysroot
-AS := $(ARCH)-hos-as
-LD := $(ARCH)-hos-ld
-C := $(ARCH)-hos-gcc
+C := $(realpath ../../compiler/opt/bin/$(ARCH)-hos-gcc)
+CPP := $(realpath ../../compiler/opt/bin/$(ARCH)-hos-g++)
+AS := $(realpath ../../compiler/opt/bin/$(ARCH)-hos-as)
+LD := $(realpath ../../compiler/opt/bin/$(ARCH)-hos-ld)
 STRIP := $(ARCH)-hos-strip
 CARGS := -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -O2 -Wall -Wextra -g  -I$(SYSROOT)/usr/include
 OBJCPY := $(ARCH)-elf-objcopy

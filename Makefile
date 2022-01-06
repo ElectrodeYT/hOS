@@ -1,8 +1,8 @@
 ARCH := x86_64
 
-C := $(ARCH)-hos-gcc
-CPP := $(ARCH)-hos-g++
-AS := $(ARCH)-hos-as
+C := $(realpath compiler/opt/bin/$(ARCH)-hos-gcc)
+CPP := $(realpath compiler/opt/bin/$(ARCH)-hos-g++)
+AS := $(realpath compiler/opt/bin/$(ARCH)-hos-as)
 
 # Cheat argument to run ./check-path.sh
 CHEAT_ARG := $(shell bash ./check-path.sh)
@@ -53,18 +53,18 @@ link $(kernel): $(objects)
 	@$(C) -T $(linker_file) -o $(kernel) -ffreestanding -nostdlib -O2 $(objects) -lgcc
 
 
-create-image $(boot_image): $(kernel)
+create-image $(boot_image): $(kernel) $(services)
 	@$(MAKE) -C arch/$(ARCH) create-image
 
-compile-services $(services): 
+compile-services $(services) &:
 	@$(MAKE) -C base all ARCH=$(ARCH)
 
-all: $(boot_image) $(services)
+all: $(boot_image)
 
-qemu: $(boot_image) $(services)
+qemu: $(boot_image)
 	@$(MAKE) -C arch/$(ARCH) qemu
 
-qemu-debug: $(boot_image) $(services)
+qemu-debug: $(boot_image)
 	@$(MAKE) -C arch/$(ARCH) qemu-debug
 
 clean:
