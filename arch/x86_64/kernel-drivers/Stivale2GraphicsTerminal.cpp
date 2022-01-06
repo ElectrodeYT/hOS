@@ -15,6 +15,7 @@ int Stivale2GraphicsTerminal::read_drv(char* buf, size_t len) {
 
 int Stivale2GraphicsTerminal::write_drv(const char* buf, size_t len) {
     if(!supported_fb) { return -ENOSYS; }
+    acquire(&mutex);
     if(bpp == 32) {
         for(size_t i = 0; i < len; i++) {
             switch(buf[i]) {
@@ -23,6 +24,15 @@ int Stivale2GraphicsTerminal::write_drv(const char* buf, size_t len) {
                     cursor_y++;
                     if(cursor_y == max_y) { CopyUpOne(); cursor_y--; }
                     cursor_x = 0;
+                    break;
+                }
+                case '\t': {
+                    cursor_x += 4;
+                    if(cursor_x >= max_x) {
+                        cursor_x = 0;
+                        cursor_y++;
+                        if(cursor_y == max_y) { CopyUpOne(); cursor_y--; }
+                    }
                     break;
                 }
                 default: {
@@ -40,7 +50,7 @@ int Stivale2GraphicsTerminal::write_drv(const char* buf, size_t len) {
                         pixels -= char_width;
                     }
                     cursor_x++;
-                    if(cursor_x == max_x) {
+                    if(cursor_x >= max_x) {
                         cursor_x = 0;
                         cursor_y++;
                         if(cursor_y == max_y) { CopyUpOne(); cursor_y--; }
@@ -49,11 +59,13 @@ int Stivale2GraphicsTerminal::write_drv(const char* buf, size_t len) {
             }
         }
     }
+    release(&mutex);
     return 0;
 }
 
 void Stivale2GraphicsTerminal::CopyUpOne() {
-    memcopy(fb + pitch, fb, pitch * (height - char_height));
+    memcopy(fb + (pitch * char_height), fb, pitch * (height - char_height));
+    memset(fb + (pitch * (height - char_height)), 0, pitch * char_height);
 }
 
 bool Stivale2GraphicsTerminal::init(stivale2_struct_tag_framebuffer* fb_tag) {
@@ -77,9 +89,11 @@ bool Stivale2GraphicsTerminal::init(stivale2_struct_tag_framebuffer* fb_tag) {
 }
 
 void Stivale2GraphicsTerminal::Clear() {
+    acquire(&mutex);
     memset(fb, 0, height * pitch);
     cursor_x = 0;
     cursor_y = 0;
+    release(&mutex);
 }
 
 }

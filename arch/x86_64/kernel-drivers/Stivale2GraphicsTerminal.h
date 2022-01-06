@@ -1,5 +1,6 @@
 #ifndef STIVALE2GRAPHICSTERMINAL_H
 #define STIVALE2GRAPHICSTERMINAL_H
+#include <CPP/mutex.h>
 #include <kernel-drivers/CharDevices.h>
 #include <stivale2.h>
 #include <stdint.h>
@@ -34,6 +35,8 @@ private:
     uint32_t fore = 0xFFFFFFFF;
 
     bool supported_fb = false;
+
+    mutex_t mutex;
 };
 
 }

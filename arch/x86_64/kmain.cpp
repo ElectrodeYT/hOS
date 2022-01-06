@@ -79,9 +79,10 @@ namespace Kernel {
         int64_t tty1 = VFS::the().open("/", "dev/tty1", -1);
         if(tty1 < 0) { KLog::the().printf("what the fuck 5\n\r"); for(;;); }
         // const char* msg = "Hello World, from VFS!\n";
-        VFS::the().pwrite(tty1, (void*)buf, strlen(buf), 0, -1);
 
-        for(;;);
+        for(;;) {
+            VFS::the().pwrite(tty1, (void*)buf, strlen(buf), 0, -1);
+        }
         (void)arg;
     }
 
