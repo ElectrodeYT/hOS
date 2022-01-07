@@ -16,6 +16,7 @@ struct Stivale2GraphicsTerminal : public CharDevice {
     void Clear();
 private:
     void CopyUpOne();
+    void Present();
 
     uint64_t cursor_x = 0;
     uint64_t cursor_y = 0;
@@ -28,6 +29,8 @@ private:
     uint64_t height;
     uint64_t pitch;
     uint64_t bpp;
+
+    uint8_t* fb_buffer;
 
     const size_t char_width = 8;
     const size_t char_height = 8;
