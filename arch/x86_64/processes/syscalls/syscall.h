@@ -20,6 +20,11 @@ public:
         SyscallMMap,
         SyscallMUnmap,
         SyscallExit,
+        SyscallFork,
+        SyscallOpen,
+        SyscallClose,
+        SyscallRead,
+        SyscallWrite,
         NumSyscalls
     };
 
@@ -29,7 +34,11 @@ public:
     // Syscall implementations
     uint64_t mmap(Processes::Process* processes, uint64_t requested_size, uint64_t* actual_size, uint64_t requested_pointer = 0, uint64_t flags = 1);
     uint64_t munmap(Processes::Process* process);
-    uint64_t iommap(Processes::Process* process, uint64_t requested_size, uint64_t phys_pointer);
+    int64_t open(const char* path, int flags);
+    int64_t close(int64_t fd);
+    int64_t read(int64_t fd, void* buf, size_t count);
+    int64_t write(int64_t fd, void* buf, size_t count);
+    int64_t seek(int64_t fd, size_t offset, int whence);
 
     // These must be called from a interrupt context
     void debugWrite(Interrupts::ISRRegisters* regs, Processes::Process* process);

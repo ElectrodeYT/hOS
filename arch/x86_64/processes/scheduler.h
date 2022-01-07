@@ -59,15 +59,6 @@ namespace Kernel {
             // Create a task running in kernel space.
             int CreateKernelTask(void (*start)(void*), void* arg, uint64_t stack_size);
 
-            // Implementation of IPCHint syscall.
-            int64_t IPCHint(int64_t msg_len, int64_t pipe_name_string, int64_t pipe_name_string_len);
-
-            // Implementation of IPCRecv syscall.
-            int64_t IPCRecv(int64_t buffer_len, int64_t buffer, int64_t should, Interrupts::ISRRegisters* regs);
-
-            // Implementation of IPCSendpipe syscall
-            int64_t IPCSendPipe(int64_t buffer, int64_t buffer_len, int64_t pipe_name_string, int64_t pipe_name_string_len);
-
             // Wait on a IRQ
             void WaitOnIRQ(int irq);
 

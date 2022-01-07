@@ -64,58 +64,24 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
             regs->rax = fork(regs);
             break;
         }
-        // ipchint
+        // open
         case 6: {
-            // KLog::the().printf("ipchint: pid %i, max size %x, string address %x, string length %x\r\n", this_proc->pid, regs->rbx, regs->rcx, regs->rdx);
-            regs->rax = (uint64_t)Processes::Scheduler::the().IPCHint(regs->rbx, regs->rcx, regs->rdx);
+            
             break;
         }
-        // ipcsendpid
+        // close
         case 7: {
-            KLog::the().printf("ipcsendpid: TODO\r\n");
-            regs->rax = -ENOSYS;
+
             break;
         }
-        // ipcsendpipe
+        // read
         case 8: {
-           //  KLog::the().printf("ipcsendpipe: pid %i, buffer at %x, size %x, string at %x, string len %i\r\n", this_proc->pid, regs->rbx, regs->rcx, regs->rdx, regs->rdi);
-            regs->rax = (uint64_t)Processes::Scheduler::the().IPCSendPipe(regs->rbx, regs->rcx, regs->rdx, regs->rdi);
+
             break;
         }
-        // ipcrecv
+        // write
         case 9: {
-            // KLog::the().printf("ipcrecv: pid %i, buffer at %x, size %x %s", this_proc->pid, regs->rbx, regs->rcx, regs->rdx ? ", blocking\r\n" : "\r\n");
-            regs->rax = (uint64_t)Processes::Scheduler::the().IPCRecv(regs->rbx, regs->rcx, regs->rdx, regs);
-            break;
-        }
-        // iohint
-        case 10: {
-            KLog::the().printf("iohint: TODO\r\n");
-            regs->rax = -ENOSYS;
-            break;
-        }
-        // iowrite
-        case 11: {
-            KLog::the().printf("iowrite: TODO\r\n");
-            regs->rax = -ENOSYS;
-            break;
-        }
-        // ioread
-        case 12: {
-            KLog::the().printf("ioread: TODO\r\n");
-            regs->rax = -ENOSYS;
-            break;
-        }
-        // irqhint
-        case 13: {
-            KLog::the().printf("irqhint: TODO\r\n");
-            regs->rax = -ENOSYS;
-            break;
-        }
-        // iommap
-        case 14: {
-            regs->rax = iommap(this_proc, regs->rbx, regs->rcx);
-            break;
+
         }
         default: KLog::the().printf("Got invalid syscall: %x\r\n", (uint64_t)regs->rax); regs->rax = -ENOSYS; break;
     }
@@ -157,30 +123,6 @@ uint64_t SyscallHandler::mmap(Processes::Process* process, uint64_t requested_si
 
 int SyscallHandler::fork(Interrupts::ISRRegisters* regs) {
     return Processes::Scheduler::the().ForkCurrent(regs);
-}
-
-uint64_t SyscallHandler::iommap(Processes::Process* process, uint64_t requested_size, uint64_t phys_pointer) {
-    // Check if the memory requested is actually a IO space (or, to be more accurate, not a memory space)
-    uint64_t size = round_to_page_up(requested_size);
-    phys_pointer &= ~(0xFFF);
-    if(!PM::CheckIOSpace(phys_pointer, size)) { return -EINVAL; }
-    // It is ok, we can map this
-    uint64_t current_map = 0x400000;
-
-    // Find the lowest starting from 0x400000 place to map this
-    for(size_t i = 0; i < process->mappings.size(); i++) {
-        // Check if this mapping would overlap with the current map
-        // Check low end
-        VM::VMObject* obj = process->mappings.at(i);
-        if((MAX((obj->base + obj->size), (current_map + size)) - MIN(obj->base, current_map)) < ((obj->base + obj->size) - obj->base) + ((current_map + size) - current_map)) {
-            current_map = obj->base + obj->size;
-        }
-    }
-    // Since this doesnt require deallocation (and i can not be bothered to code saftey into this) we can just map this
-    for(uint64_t curr = 0; curr < size; curr += 4096) {
-        VM::MapPage(phys_pointer + curr, current_map + curr, 0b111);
-    }
-    return current_map;
 }
 
 }
