@@ -50,39 +50,17 @@ namespace Kernel {
         DevFSDriver* devfs = new DevFSDriver;
         VFS::the().attemptMountOnFolder("/", "dev", devfs);
 
-        // We have mounted root, try to read hello.txt lol
-        PM::PrintMemUsage();
-        int hello_fd = VFS::the().open("/", "hello.txt", -1);
-        if(hello_fd < 0) { KLog::the().printf("what the fuck 1\n\r"); for(;;); }
-        size_t hello_size = VFS::the().size(hello_fd, -1);
-        char* buf = new char[hello_size + 1];
-        memset(buf, 0, hello_size + 1);
-        if(VFS::the().pread(hello_fd, buf, hello_size, 0, -1) < 0) { KLog::the().printf("what the fuck 2\n\r"); for(;;); }
-        PM::PrintMemUsage();
-        // KLog::the().printf("%s\n\r", buf);
-        VFS::the().close(hello_fd, -1);
-        
-        // Lets try to launch a elf from vfs
-        PM::PrintMemUsage();
-        int64_t testa_fd = VFS::the().open("/", "testa.elf", -1);
-        if(testa_fd < 0) { KLog::the().printf("what the fuck 3\n\r"); for(;;); }
-        size_t testa_size = VFS::the().size(testa_fd, -1);
-        if(!testa_size) { KLog::the().printf("what the fuck 4\n\r"); for(;;); }
-        uint8_t* testa = new uint8_t[testa_size];
-        VFS::the().pread(testa_fd, testa, testa_size, 0, -1);
-        Processes::Scheduler::the().CreateProcess(testa, testa_size, "testa", "/");
-        PM::PrintMemUsage();
-        delete testa;
-        VFS::the().close(testa_fd, -1);
-
-        // Try to write to /dev/tty1 manually lol
-        int64_t tty1 = VFS::the().open("/", "dev/tty1", -1);
-        if(tty1 < 0) { KLog::the().printf("what the fuck 5\n\r"); for(;;); }
-        // const char* msg = "Hello World, from VFS!\n";
-
-        for(;;) {
-            VFS::the().pwrite(tty1, (void*)buf, strlen(buf), 0, -1);
-        }
+        // See if we can launch /init
+        int64_t init_fd = VFS::the().open("/", "init", -1);
+        if(init_fd < 0) { Debug::Panic("Unable to start init"); }
+        uint64_t init_size = VFS::the().size(init_fd, -1);
+        if(init_size == 0) { Debug::Panic("Init elf size == 0"); }
+        uint8_t* init_elf = new uint8_t[init_size];
+        VFS::the().pread(init_fd, init_elf, init_size, 0, -1);
+        VFS::the().close(init_fd, -1);
+        Processes::Scheduler::the().CreateProcess(init_elf, init_size, "init", "/");
+        Processes::Scheduler::the().KillCurrentProcess();
+        for(;;);
         (void)arg;
     }
 
