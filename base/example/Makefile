@@ -8,9 +8,9 @@ LD := $(realpath ../../compiler/opt/bin/$(ARCH)-hos-ld)
 STRIP := $(ARCH)-hos-strip
 CARGS := -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -O2 -Wall -Wextra -g  -I$(SYSROOT)/usr/include
 OBJCPY := $(ARCH)-elf-objcopy
-sources := testa.c testb.c
-objects := testa.elf testb.elf
-objects_sysroot := $(addprefix $(SYSROOT)/, $(objects))
+sources := init.c
+objects := init.elf
+objects_sysroot := $(addprefix $(SYSROOT)/, $(basename $(objects)))
 
 %.elf: %.s
 	@echo "[BASE-ASM]		" $< $@
@@ -19,11 +19,12 @@ objects_sysroot := $(addprefix $(SYSROOT)/, $(objects))
 
 %.elf: %.c
 	@echo "[BASE-C]		" $< $@
-	@$(C) -c $< -o $@.o $(CARGS) -I../tiny-libc/inc
+	@$(C) -c $< -o $@.o $(CARGS)
 	@$(C) -O2 $@.o -o $@ -static -lgcc
 	@#$(STRIP) $@
 
-$(SYSROOT)/%.elf: %.elf
+$(objects_sysroot): ${objects}
+	@echo "[CP]			"$< $@
 	@cp $< $@
 
 all: $(objects) $(objects_sysroot)

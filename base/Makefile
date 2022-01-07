@@ -1,5 +1,5 @@
 BOOT_LIBS := ../sysroot/usr/lib/libc.a
-BOOT_APPS := ../sysroot/testa.elf ../sysroot/testb.elf
+BOOT_APPS := ../sysroot/init
 
 all: $(BOOT_APPS) $(BOOT_LIBS)
 

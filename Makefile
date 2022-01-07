@@ -31,7 +31,7 @@ boot_image := arch/$(ARCH)/hKern.img
 objects := $(assembly_o) $(c_o) $(cpp_o)
 
 # Services we need to boot
-services := sysroot/testa.elf sysroot/testb.elf
+services := sysroot/init
 
 .PHONY: all create-image compile-services link qemu qemu-debug cloc
 
