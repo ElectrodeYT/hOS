@@ -9,7 +9,7 @@ make compile-services
 if [$? -ne 0]; then
   echo "Test services failed to compile"; false
 else
-  trap '' INT; make qemu-debug -j16; true
+  trap '' INT; make qemu-init-debug -j16; true
 fi
 make clean
 make cloc

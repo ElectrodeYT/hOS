@@ -48,7 +48,7 @@ echo create sysroot headers
 if ! [ -d build-binutils ]; then
   echo config binutils
   mkdir build-binutils
-  (cd build-binutils; ../binutils-2.37/configure --target=x86_64-hos --prefix="$PREFIX" --with-sysroot="$SYSROOT" --enable-languages=c,c++ )
+  (cd build-binutils; ../binutils-2.37/configure --target=x86_64-hos --prefix="$PREFIX" --with-sysroot="$SYSROOT" --enable-languages=c,c++ --enable-shared )
   if [ $? -ne 0 ]; then
     echo config failed
     exit -1
@@ -68,7 +68,7 @@ echo install binutils
 if ! [ -d build-gcc ]; then
   echo config gcc
   mkdir -p build-gcc
-  (cd build-gcc; ../gcc-11.2.0/configure --target=x86_64-hos --prefix="$PREFIX" --with-sysroot="$SYSROOT" --enable-languages=c,c++ )
+  (cd build-gcc; ../gcc-11.2.0/configure --target=x86_64-hos --prefix="$PREFIX" --with-sysroot="$SYSROOT" --enable-languages=c,c++ --enable-shared )
   if [ $? -ne 0 ]; then
     echo config failed
     exit -1

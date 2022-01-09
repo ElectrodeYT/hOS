@@ -20,7 +20,7 @@ objects_sysroot := $(addprefix $(SYSROOT)/, $(basename $(objects)))
 %.elf: %.c
 	@echo "[BASE-C]		" $< $@
 	@$(C) -c $< -o $@.o $(CARGS)
-	@$(C) -O2 $@.o -o $@ -static -lgcc
+	@$(C) -O2 $@.o -o $@ -lgcc 
 	@#$(STRIP) $@
 
 $(objects_sysroot): ${objects}
