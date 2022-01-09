@@ -79,6 +79,20 @@ bool ELF::readHeader() {
         sections.push_back(new_section);
         Kernel::KLog::the().printf("Segment %i: vaddr %x, file size %x, segment size %x, type %i\r\n", i, vaddr, size_in_file, size_in_memory, type);
         Kernel::KLog::the().printf("Offset in file: %x\r\n", offset_in_file);
+    
+        // If this is a interpreter segment, read the interpreter out
+        if(type == PT_INTERP) {
+            if(isDynamic) { 
+                Kernel::KLog::the().printf("ELF file error: several interperter sections\n\r");
+                return false;
+            }
+            isDynamic = true;
+            // Read out the path name
+            interpreterPath = new char[size_in_file + 1];
+            memset(interpreterPath, 0, size_in_file + 1);
+            new_section->copy_out(interpreterPath);
+            Kernel::KLog::the().printf("Interpreter: %s\n\r", interpreterPath);
+        }
     }
 
 

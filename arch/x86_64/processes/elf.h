@@ -33,6 +33,16 @@ public:
         ET_CORE
     };
 
+    enum ProgramHeaderType {
+        PT_NULL = 0,
+        PT_LOAD,
+        PT_DYNAMIC,
+        PT_INTERP,
+        PT_NOTE,
+        PT_SHLIB,
+        PT_PHDR
+    };
+
     ObjectFileType file_object_type;
     uint16_t file_machine_type;
     uint32_t file_object_version;
@@ -46,6 +56,9 @@ public:
     uint16_t file_section_header_entry_size;
     uint16_t file_section_header_count;
     uint16_t file_section_name_string_table_index;
+
+    bool isDynamic = false;
+    char* interpreterPath = NULL;
 
     struct Section {
         uint64_t file_begin;

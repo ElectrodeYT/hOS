@@ -58,7 +58,7 @@ namespace Kernel {
         uint8_t* init_elf = new uint8_t[init_size];
         VFS::the().pread(init_fd, init_elf, init_size, 0, -1);
         VFS::the().close(init_fd, -1);
-        Processes::Scheduler::the().CreateProcess(init_elf, init_size, "init", "/");
+        Processes::Scheduler::the().CreateProcess(init_elf, init_size, "init", "/", true);
         Processes::Scheduler::the().KillCurrentProcess();
         for(;;);
         (void)arg;

@@ -38,7 +38,7 @@ namespace Kernel {
             // Load a ELF file.
             // This is used to create "first pids"; Other exec and forks should result from other versions of this process.
             // This initializes argc to 1 and argv to name, and sets env and enc to NULL.
-            int64_t CreateProcess(uint8_t* data, size_t length, const char* name, const char* working_dir);
+            int64_t CreateProcess(uint8_t* data, size_t length, const char* name, const char* working_dir, bool init = false);
 
             // Create a process as a parent from another process.
             // This copies the enviroment from the parent process.
@@ -93,14 +93,15 @@ namespace Kernel {
 
         private:
             // Implementation of CreateProcess.
-            int64_t CreateProcessImpl(uint8_t* data, size_t length, char** argv, int arc, char** envp, int envc, const char* working_dir);
+            int64_t CreateProcessImpl(uint8_t* data, size_t length, char** argv, int arc, char** envp, int envc, const char* working_dir, bool init = false);
 
             // Get the next available PID
             int64_t GetNextPid() {
-                if(processes.size() == 0) { return 0; }
+                if(processes.size() == 0) { return 1; }
                 int64_t curr = 1;
-                for(size_t i = 0; i < processes.size(); i++) {
-                    if(processes.at(i)->pid == curr) { curr++; i = 0; }
+                for(size_t i = 0; i < processes.size();) {
+                    if(!processes.at(i)->is_kernel && processes.at(i)->pid == curr) { curr++; i = 0; continue; }
+                    i++;
                 }
                 return curr;
             }
@@ -119,6 +120,8 @@ namespace Kernel {
 
             bool running_proc_killed = false;
             bool running_thread_killed = false;
+
+            bool init_spawned = false;
 
             mutex_t mutex = 0;
         };

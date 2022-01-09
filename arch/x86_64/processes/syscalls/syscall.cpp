@@ -66,22 +66,27 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
         }
         // open
         case 6: {
-            
+            KLog::the().printf("open\n\r");
+            regs->rax = -ENOSYS;
             break;
         }
         // close
         case 7: {
-
+            KLog::the().printf("close\n\r");
+            regs->rax = -ENOSYS;
             break;
         }
         // read
         case 8: {
-
+            KLog::the().printf("read\n\r");
+            regs->rax = -ENOSYS;
             break;
         }
         // write
         case 9: {
-
+            KLog::the().printf("write\n\r");
+            regs->rax = -ENOSYS;
+            break;
         }
         default: KLog::the().printf("Got invalid syscall: %x\r\n", (uint64_t)regs->rax); regs->rax = -ENOSYS; break;
     }

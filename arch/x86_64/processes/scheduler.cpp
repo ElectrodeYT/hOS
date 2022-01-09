@@ -11,23 +11,62 @@
 #include <hardware/instructions.h>
 #include <processes/syscalls/syscall.h>
 #include <errno.h>
+#include <kernel-drivers/VFS.h>
 
 namespace Kernel {
     namespace Processes {
         void Scheduler::Init() {
             // TODO
         }
-        int64_t Scheduler::CreateProcessImpl(uint8_t* data, size_t length, char** argv, int argc, char** envp, int envc, const char* working_dir) {
+        int64_t Scheduler::CreateProcessImpl(uint8_t* data, size_t length, char** argv, int argc, char** envp, int envc, const char* working_dir, bool init) {
             acquire(&mutex);
             // Sanity checks
             if(!argv) { return -EINVAL; }
             if(!envp) { return -EINVAL; }
             if(argc < 0) { return -EINVAL; }
             if(envc < 0) { return -EINVAL; }
+
+            ELF* elf = new ELF(data, length);
+            if(!elf->readHeader()) {
+                KLog::the().printf("Failed to load ELF file for process %s\r\n", argv[0]);
+                return -EINVAL;
+            }
+            // If this is a dynamic executable, we need to load the dynamic relocator
+            char* interpreter_name;
+            bool is_interpreter = false;
+            if(elf->isDynamic) {
+                KLog::the().printf("Loading ELF interpreter %s\n\r", elf->interpreterPath);
+                // Copy out the name
+                interpreter_name = new char[strlen(elf->interpreterPath)];
+                memcopy(elf->interpreterPath, interpreter_name, strlen(elf->interpreterPath));
+                // Try to load the ld.so used by this executable
+                int64_t ld_fd = VFS::the().open("/", elf->interpreterPath, -1);
+                if(ld_fd < 0) {
+                    KLog::the().printf("Error executing ELF file %s: interpreter %s doesnt exist\n\r", argv[0], elf->interpreterPath);
+                    delete elf;
+                    return -EINVAL;
+                }
+                delete elf;
+                length = VFS::the().size(ld_fd, -1);
+                data = new uint8_t[length];
+                VFS::the().pread(ld_fd, data, length, 0, -1);
+                VFS::the().close(ld_fd, -1);
+                elf = new ELF(data, length);
+                if(!elf->readHeader()) {
+                    KLog::the().printf("Failed to load ELF header for ld\n\r");
+                }
+                is_interpreter = true;
+            }
+            
+
             // Calculate argv size
             size_t argv_size = 0;
             for(size_t i = 0; i < (size_t)argc; i++) {
                 argv_size += strlen(argv[i]) + 1;
+                argv_size += 8; // Pointer
+            }
+            if(is_interpreter) {
+                argv_size += strlen(interpreter_name);
                 argv_size += 8; // Pointer
             }
             if(argv_size > 0x1000) { return -E2BIG; }
@@ -42,29 +81,30 @@ namespace Kernel {
             envp_size += 8; // Terminator pointer
             if(envp_size > 0x1000) { return -E2BIG; }
 
-            ELF elf(data, length);
-            if(!elf.readHeader()) {
-                KLog::the().printf("Failed to load ELF file for process %s\r\n", argv[0]);
-                return -EINVAL;
-            }
 
             // Create process
             Process* new_proc = new Process;
             new_proc->page_table = VM::CreateNewPageTable();
-            new_proc->pid = GetNextPid();
+            if(init) {
+                ASSERT(!init_spawned, "CreateProcessImpl called with init after init has been spawned");
+                new_proc->pid = 0;
+                init_spawned = true;
+            } else {
+                new_proc->pid = GetNextPid();
+            }
             // Set the parent
             new_proc->parent = 0;
             // Create the string in it, and copy the given name over
             size_t name_len = strlen(argv[0]);
             new_proc->name = new char[name_len + 1];
             memcopy(argv[0], new_proc->name, name_len + 1);
-
+            // Copy working dir
             size_t working_dir_len = strlen(working_dir);
             new_proc->working_dir = new char[working_dir_len + 1];
             memcopy((void*)working_dir, new_proc->working_dir, working_dir_len + 1);
             
 
-            KLog::the().printf("Creating new process %s\r\n", new_proc->name);
+            KLog::the().printf("Creating new process %s, working dir %s\r\n", new_proc->name, new_proc->working_dir);
 
             
             // We want to save the current page table, as we need to switch to it later
@@ -74,8 +114,8 @@ namespace Kernel {
 
             // We now need to loop through all the created segments, and see if we
             // need to make mappings for them
-            for(size_t i = 0; i < elf.sections.size(); i++) {
-                ELF::Section* section = elf.sections.at(i);
+            for(size_t i = 0; i < elf->sections.size(); i++) {
+                ELF::Section* section = elf->sections.at(i);
                 if(section->loadable) {
                     // TODO: correct permissions
                     VM::VMObject* mapping = new VM::VMObject(true, false);
@@ -100,7 +140,7 @@ namespace Kernel {
             }
 
             // Create main stack
-            const uint64_t stack_size = 0x8000;
+            const uint64_t stack_size = 16 * 4096;
             uint64_t stack_base = SyscallHandler::the().mmap(new_proc, stack_size, NULL);
 
             // Copy argv
@@ -144,7 +184,7 @@ namespace Kernel {
             // Initialize main thread
             Thread* main_thread = new Thread;
             main_thread->tid = 0;
-            main_thread->regs.rip = elf.file_entry;
+            main_thread->regs.rip = elf->file_entry;
             main_thread->regs.rflags = 0x202;
             main_thread->regs.cs = 0x18 | 0b11;
             main_thread->regs.ss = 0x20 | 0b11;
@@ -179,12 +219,12 @@ namespace Kernel {
             return new_proc->pid;
         }
 
-        int64_t Scheduler::CreateProcess(uint8_t* data, size_t length, const char* name, const char* working_dir) {
+        int64_t Scheduler::CreateProcess(uint8_t* data, size_t length, const char* name, const char* working_dir, bool init) {
             // Create a fake envc, envp
             char* fake_env[1] = { NULL };
             // Create a argv containing only the program name
             char* argv[1] = { (char*)name }; 
-            return CreateProcessImpl(data, length, argv, 1, fake_env, 0, working_dir); // parent = UINT64_MAX; this will make CreateProcessImpl set parent to itself 
+            return CreateProcessImpl(data, length, argv, 1, fake_env, 0, working_dir, init); // parent = UINT64_MAX; this will make CreateProcessImpl set parent to itself 
         }
 
         int64_t Scheduler::CreateProcess(uint8_t* data, size_t length, char** argv, int argc) {
@@ -445,6 +485,7 @@ namespace Kernel {
         void Scheduler::KillCurrentProcess() {
             ASSERT(processes.size() > curr_proc, "KillCurrentProcess() called while curr_proc is out of range!");
             Process* proc = processes.at(curr_proc);
+            ASSERT(proc->pid, "Attempted to kill init!");
             // KLog::the().printf("Killing %s\r\n", proc->name);
             uint64_t state = save_irqdisable();
             

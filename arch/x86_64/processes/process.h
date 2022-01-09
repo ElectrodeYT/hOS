@@ -79,6 +79,16 @@ namespace Kernel {
             bool attemptCopyToUser(uint64_t user_pointer, size_t size, void* source);
         
             char* working_dir;
+
+            struct VFSTranslation {
+                int64_t process_fd;
+                int64_t global_fd;
+            };
+
+            Vector<VFSTranslation>* fd_translation_table = NULL;
+            int* fd_translation_table_ref_count = NULL;
+            
+            bool attempt_destroy = false;
         };
     }
 }
