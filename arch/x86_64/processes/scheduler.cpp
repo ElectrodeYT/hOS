@@ -143,40 +143,9 @@ namespace Kernel {
             const uint64_t stack_size = 16 * 4096;
             uint64_t stack_base = SyscallHandler::the().mmap(new_proc, stack_size, NULL);
 
-            // Copy argv
-            uint64_t argv_base = SyscallHandler::the().mmap(new_proc, argv_size, &argv_size);
-            uint64_t envp_base = SyscallHandler::the().mmap(new_proc, envp_size, &envp_size);
-            
-
-            // Copy argv
-            uint64_t current_front = argv_base;
-            uint64_t current_back = argv_base + argv_size;
-            for(size_t i = 0; i < (size_t)argc; i++) {
-                size_t string_len = strlen(argv[i]);
-                current_back -= string_len + 1;
-                memcopy(argv[i], (void*)current_back, string_len + 1);
-                // Set pointer
-                *(volatile uint64_t*)(current_front) = current_back;
-                current_front += 8;
-            }
-
-            // Copy envp
-            current_front = envp_base;
-            current_back = envp_base + envp_size;
-            for(size_t i = 0; i < (size_t)envc; i++) {
-                size_t string_len = strlen(argv[i]);
-                current_back -= string_len + 1;
-                memcopy(argv[i], (void*)current_back, string_len + 1);
-                // Set pointer
-                *(volatile uint64_t*)(current_front) = current_back;
-                current_front += 8;
-            }
-            // For envp we need to set the last pointer to 0 as well
-            *(volatile uint64_t*)(current_front) = 0;
-
-            // We put &argc and &argv on the stack
-            // *(uint64_t* volatile)(stack_base + stack_size - 8) = argv_base;
-            // *(uint64_t* volatile)(stack_base + stack_size - 16) = envp_base;
+            // Setup stack
+            uint64_t proc_rsp;
+            ProcessSetupStack(argv, argc, envp, envc, (void*)(stack_base + stack_size - 8), &proc_rsp);
 
             // The sections have been copied out, we can now switch the page table back
             SwitchPageTables(curr_page_table);
@@ -193,10 +162,10 @@ namespace Kernel {
 
             main_thread->stack_base = stack_base;
             main_thread->stack_size = stack_size;
-            main_thread->regs.rsp = stack_base + stack_size; // -16 for the two pointers on the stack
+            main_thread->regs.rsp = proc_rsp; // -16 for the two pointers on the stack
             main_thread->regs.rdi = argc;
-            main_thread->regs.rsi = argv_base;
-            main_thread->regs.rdx = envp_base;
+            main_thread->regs.rsi = 0;
+            main_thread->regs.rdx = 0;
             main_thread->regs.rcx = envc;
             
             // Create syscall thread stack
@@ -217,6 +186,52 @@ namespace Kernel {
             processes.push_back(new_proc);
             release(&mutex);
             return new_proc->pid;
+        }
+
+        bool Scheduler::ProcessSetupStack(char** argv, int argc, char** envp, int envc, void* stack_base, uint64_t* rsp) {
+            // We save the pointers to the args/env we put on the stack here, to quickly push them
+            char** argv_stack_pos = new char*[argc];
+            char** envp_stack_pos = new char*[envc];
+            
+            uint64_t* proc_stack = (uint64_t*)stack_base;
+            #define push_to_stack(a) *--proc_stack = a;
+            
+            // Copy the argv to the stack
+            for(size_t i = 0; i < (size_t)argc; i++) {
+                size_t arg_len = strlen(argv[i]); if(arg_len > 0x1000) { return false; }
+                proc_stack = (uint64_t*)((uint8_t*)(proc_stack) - arg_len + 1);
+                memset(proc_stack, 0, arg_len + 1);
+                memcopy(argv[i], proc_stack, arg_len);
+                argv_stack_pos[i] = (char*)proc_stack;
+            }
+
+            // Copy the envp to the stack
+            for(size_t i = 0; i < (size_t)envc; i++) {
+                size_t env_len = strlen(envp[i]); if(env_len > 0x1000) { return false; }
+                proc_stack = (uint64_t*)((uint8_t*)(proc_stack) - env_len + 1);
+                memset(proc_stack, 0, env_len + 1);
+                memcopy(envp[i], proc_stack, env_len);
+                envp_stack_pos[i] = (char*)proc_stack;
+            }
+
+            // Pad the stack
+            size_t stack_pad_size = ((size_t)proc_stack & 0xF);
+            proc_stack = (uint64_t*)((uint8_t*)(proc_stack) -  stack_pad_size);
+
+            // TODO: aux vector
+            push_to_stack(0);
+
+            // Push the env shit
+            push_to_stack(0);
+            for(int i = envc - 1; i >= 0; i--) { push_to_stack((uint64_t)envp_stack_pos[i]); }
+
+            push_to_stack(0);
+            // Push the arguments
+            for(int i = argc - 1; i >= 0; i--) { push_to_stack((uint64_t)argv_stack_pos[i]); }
+            push_to_stack(argc);
+
+            *rsp = (uint64_t)proc_stack;
+            return true;
         }
 
         int64_t Scheduler::CreateProcess(uint8_t* data, size_t length, const char* name, const char* working_dir, bool init) {

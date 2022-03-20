@@ -70,6 +70,9 @@ qemu-debug: $(boot_image)
 qemu-init-debug: $(boot_image)
 	@$(MAKE) -C arch/$(ARCH) qemu-init-debug
 
+qemu-ld-init-debug: $(boot_image)
+	@$(MAKE) -C arch/$(ARCH) qemu-ld-init-debug
+
 clean:
 	@rm $(objects) $(kernel) $(boot_image) 2> /dev/null; true
 	@$(MAKE) -C arch/$(ARCH) clean

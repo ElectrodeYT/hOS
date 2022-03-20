@@ -95,6 +95,9 @@ namespace Kernel {
             // Implementation of CreateProcess.
             int64_t CreateProcessImpl(uint8_t* data, size_t length, char** argv, int arc, char** envp, int envc, const char* working_dir, bool init = false);
 
+            // Setup stack of process
+            bool ProcessSetupStack(char** argv, int argc, char** envp, int envc, void* stack_base, uint64_t* rsp);
+
             // Get the next available PID
             int64_t GetNextPid() {
                 if(processes.size() == 0) { return 1; }

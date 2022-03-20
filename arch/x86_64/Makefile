@@ -44,5 +44,8 @@ qemu-debug: $(image)
 qemu-init-debug: $(image)
 	@gdb -x ../../sysroot/boot/gdb-init.gdb -tui
 
+qemu-ld-init-debug: $(image)
+	@gdb -x ../../sysroot/boot/gdb-ld-init.gdb -tui
+
 clean:
 	@rm $(image) 2> /dev/null; true
