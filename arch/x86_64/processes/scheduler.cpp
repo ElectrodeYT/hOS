@@ -57,7 +57,7 @@ namespace Kernel {
                 }
                 is_interpreter = true;
             }
-            
+        
 
             // Calculate argv size
             size_t argv_size = 0;
@@ -145,6 +145,11 @@ namespace Kernel {
                 }
             }
 
+            // If we loaded the interpreter, we can now perform relocations on the ELF binary
+            if(is_interpreter) {
+                // elf->relocate((void*)0x40000000);
+            }
+
             // Create main stack
             const uint64_t stack_size = 16 * 4096;
             uint64_t stack_base = SyscallHandler::the().mmap(new_proc, stack_size, NULL);
@@ -176,6 +181,9 @@ namespace Kernel {
             Thread* main_thread = new Thread;
             main_thread->tid = 0;
             main_thread->regs.rip = elf->file_entry;
+            if(is_interpreter) {
+                main_thread->regs.rip += 0x40000000;
+            }
             main_thread->regs.rflags = 0x202;
             main_thread->regs.cs = 0x18 | 0b11;
             main_thread->regs.ss = 0x20 | 0b11;

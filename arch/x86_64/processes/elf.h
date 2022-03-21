@@ -26,7 +26,6 @@ public:
     bool readHeader();
 
     // Performs ELF Relocations.
-    // Assumes the ELF is currently loaded in this page table.
     void relocate(void* load_base);
 
     enum ObjectFileType {
@@ -73,6 +72,30 @@ public:
         AT_EXECFN = 31
     };
 
+    enum ElfRelocationTypes {
+        R_AMD64_NONE = 0,
+        R_AMD64_64,
+        R_AMD64_PC32,
+        R_AMD64_GOT32,
+        R_AMD64_PLT32,
+        R_AMD64_COPY,
+        R_AMD64_GLOB_DAT,
+        R_AMD64_JUMP_SLOT,
+        R_AMD64_RELATIVE,
+        R_AMD64_GOTPCREL,
+        R_AMD64_32,
+        R_AMD64_32S,
+        R_AMD64_16,
+        R_AMD64_PC16,
+        R_AMD64_8,
+        R_AMD64_PC8,
+        R_AMD64_PC64 = 24,
+        R_AMD64_GOTOFF64,
+        R_AMD64_GOTPC32,
+        R_AMD64_SIZE32 = 32,
+        R_AMD64_SIZE64
+    };
+
     ObjectFileType file_object_type;
     uint16_t file_machine_type;
     uint32_t file_object_version;
@@ -113,18 +136,56 @@ public:
         void* data;
     };
     
-    struct Relocations {
+    struct SymbolTable {
+        uint32_t st_name;
+        uint8_t st_info;
+        uint8_t st_other;
+        uint16_t st_shndx;
+        uint64_t st_value;
+        uint64_t st_size;
+    } __attribute__((packed));
+
+    // These defines are straight from the ELF64 spec
+    #define ELF64_R_SYM(i)((i) >> 32)
+    #define ELF64_R_TYPE(i)((i) & 0xffffffffL)
+    #define ELF64_R_INFO(s, t)(((s) << 32) + ((t) & 0xffffffffL))
+    #define SHN_UNDEF (0x00) // Undefined/Not present
+    
+    struct Rel {
+        uint64_t r_offset;
+        uint64_t r_info;
+    } __attribute__((packed));
+
+    struct Rela {
+        uint64_t r_offset;
+        uint64_t r_info;
+        uint64_t r_addend;
+    } __attribute__((packed));
+  
+    struct SectionHeader {
         uint64_t file_begin;
         uint64_t size;
         uint64_t type;
+        uint32_t link;
+        uint32_t info;
+        uint64_t ent_size;
+
+        SymbolTable* toSymbols(void* data) { return (SymbolTable*)((uint8_t*)(data) + file_begin); }
+        Rel* toRel(void* data) { return (Rel*)((uint8_t*)(data) + file_begin); }
+        Rela* toRela(void* data) { return (Rela*)((uint8_t*)(data) + file_begin); }
+        
     };
 
+
     Vector<Section*> sections;
-    Vector<Relocations*> relocations;
+    Vector<SectionHeader*> section_headers;
 
 private:
     
-    
+    // TODO: handle, well, everything correctly
+    // (tl;dr: dont just treat everything as a virtual address)
+    void relocateSingleTable(Rela* rela, SectionHeader* relocation, void* load_base);
+    void relocateSingleTable(Rel* rel, SectionHeader* relocation, void* load_base);
     
     // Elf file endianness
     // true is big endian, false is little endian

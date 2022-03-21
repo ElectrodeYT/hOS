@@ -108,22 +108,91 @@ bool ELF::readHeader() {
         uint64_t sh_addralign = read64(curr_pointer); curr_pointer += 8;
         uint64_t sh_entsize = read64(curr_pointer); curr_pointer += 8;
         
-        if(sh_type == SHT_RELA || sh_type == SHT_REL) {
-            Relocations* relocation = new Relocations;
-            relocation->file_begin = sh_offset;
-            relocation->size = sh_size;
-            relocation->type = sh_type;
-            relocations.push_back(relocation);
-        }
+        SectionHeader* section_header = new SectionHeader;
+        section_header->file_begin = sh_offset;
+        section_header->size = sh_size;
+        section_header->type = sh_type;
+        section_header->link = sh_link;
+        section_header->info = sh_info;
+        section_header->ent_size = sh_entsize;
+        section_headers.push_back(section_header);
+
+        (void)sh_name;
+        (void)sh_flags;
+        (void)sh_addr;
+        (void)sh_addralign;
     }
     return true;
 }
 
 void ELF::relocate(void* load_base) {
-    for(size_t i = 0; i < relocations.size(); i++) {
-        Relocations* relocation = relocations.at(i);
+    for(size_t i = 0; i < section_headers.size(); i++) {
+        SectionHeader* relocation = section_headers.at(i);
+        // link must be valid
+        if(relocation->link >= section_headers.size()) { continue; }
+        // SymbolTable* symbol_table = section_headers.at(relocation->link)->toSymbols(data);
+        
         if(relocation->type == SHT_RELA) {
-            
+            Kernel::KLog::the().printf("Relocation section RELA, section %i, link %i\n\r", i, relocation->link);
+            relocateSingleTable(relocation->toRela(data), relocation, load_base);
+        } else if(relocation->type == SHT_REL) {
+            Kernel::KLog::the().printf("Relocation section REL, section %i, link %i\n\r", i, relocation->link);
+            relocateSingleTable(relocation->toRel(data), relocation, load_base);    
+        }
+    }
+    (void)load_base;
+}
+
+void ELF::relocateSingleTable(Rela* rela, SectionHeader* relocation, void* load_base) {
+    SectionHeader* target = section_headers.at(relocation->info);
+    for(size_t i = 0; i < relocation->size / relocation->ent_size; i++) {
+        //uint64_t addr = (uint64_t)data + target->file_begin;
+        uint64_t addr = (uint64_t)load_base + target->file_begin;
+        uint64_t* ref = (uint64_t*)(addr + rela[i].r_offset);
+
+        // We now read the symbol value, if we have one
+        uint64_t symbol_value = 0;
+        if(ELF64_R_SYM(rela[i].r_info) != SHN_UNDEF) {
+            Kernel::KLog::the().printf("TODO: support symbols during relocation\n\r");
+        }
+
+        // We can now relocate based on type
+        switch(ELF64_R_TYPE(rela[i].r_info)) {
+            case R_AMD64_NONE: break;
+            case R_AMD64_RELATIVE: {
+                *ref = symbol_value + (uint64_t)(load_base) + rela[i].r_addend;
+                break;
+            }
+            default: {
+                Kernel::KLog::the().printf("TODO: support more relocation types; elf has type %i\n\r", ELF64_R_TYPE(rela[i].r_info));
+            }
+        }
+    }
+}
+
+void ELF::relocateSingleTable(Rel* rel, SectionHeader* relocation, void* load_base) {
+    SectionHeader* target = section_headers.at(relocation->info);
+    for(size_t i = 0; i < relocation->size / relocation->ent_size; i++) {
+        //uint64_t addr = (uint64_t)data + target->file_begin;
+        uint64_t addr = (uint64_t)load_base + target->file_begin;
+        uint64_t* ref = (uint64_t*)(addr + rel[i].r_offset);
+
+        // We now read the symbol value, if we have one
+        uint64_t symbol_value = 0;
+        if(ELF64_R_SYM(rel[i].r_info) != SHN_UNDEF) {
+            Kernel::KLog::the().printf("TODO: support symbols during relocation\n\r");
+        }
+
+        // We can now relocate based on type
+        switch(ELF64_R_TYPE(rel[i].r_info)) {
+            case R_AMD64_NONE: break;
+            case R_AMD64_RELATIVE: {
+                *ref = symbol_value + (uint64_t)(load_base);
+                break;
+            }
+            default: {
+                Kernel::KLog::the().printf("TODO: support more relocation types; elf has type %i\n\r", ELF64_R_TYPE(rel[i].r_info));
+            }
         }
     }
 }
