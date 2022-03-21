@@ -47,11 +47,11 @@ namespace Kernel {
                     return -EINVAL;
                 }
                 delete elf;
-                length = VFS::the().size(ld_fd, -1);
-                data = new uint8_t[length];
-                VFS::the().pread(ld_fd, data, length, 0, -1);
+                size_t int_length = VFS::the().size(ld_fd, -1);
+                uint8_t* int_data = new uint8_t[int_length];
+                VFS::the().pread(ld_fd, int_data, int_length, 0, -1);
                 VFS::the().close(ld_fd, -1);
-                elf = new ELF(data, length);
+                elf = new ELF(int_data, int_length);
                 if(!elf->readHeader()) {
                     KLog::the().printf("Failed to load ELF header for ld\n\r");
                 }
@@ -122,6 +122,12 @@ namespace Kernel {
                     mapping->base = section->vaddr & ~(0xFFF);
                     mapping->size = round_to_page_up(section->segment_size);
 
+                    if(is_interpreter) {
+                        mapping->base += 0x40000000;
+                    } else if(mapping->base == 0) {
+                        return false;
+                    }
+                    
                     KLog::the().printf("Mapping for ELF segment %i: base %x, size %x\r\n", i, mapping->base, mapping->size);
 
                     // Allocate it
@@ -134,7 +140,7 @@ namespace Kernel {
                     }
 
                     // Now copy to it
-                    section->copy_out((void*)section->vaddr);
+                    section->copy_out((void*)mapping->base);
                     new_proc->mappings.push_back(mapping);
                 }
             }
@@ -143,9 +149,25 @@ namespace Kernel {
             const uint64_t stack_size = 16 * 4096;
             uint64_t stack_base = SyscallHandler::the().mmap(new_proc, stack_size, NULL);
 
+            // If we have a dynamic link, we need to copy the elf file of the original executable into memory
+            uint64_t aux_phdr = 0;
+            uint64_t aux_phent = 0;
+            uint64_t aux_phnum = 0;
+            uint64_t aux_entry = 0;
+            if(is_interpreter) {
+                ELF* real_elf = new ELF(data, length); // original elf file
+                real_elf->readHeader();
+                uint64_t elf_base = SyscallHandler::the().mmap(new_proc, length, NULL, 0x9000000);
+                memcopy(data, (void*)elf_base, length);
+                aux_entry = real_elf->file_entry;
+                aux_phdr = elf_base + real_elf->file_program_header_offset;
+                aux_phent = real_elf->file_program_header_entry_size;
+                aux_phnum = real_elf->file_program_header_count;
+            }
+
             // Setup stack
             uint64_t proc_rsp;
-            ProcessSetupStack(argv, argc, envp, envc, (void*)(stack_base + stack_size - 8), &proc_rsp);
+            ProcessSetupStack(argv, argc, envp, envc, (void*)(stack_base + stack_size - 8), aux_entry, aux_phdr, aux_phent, aux_phnum, &proc_rsp);
 
             // The sections have been copied out, we can now switch the page table back
             SwitchPageTables(curr_page_table);
@@ -188,7 +210,7 @@ namespace Kernel {
             return new_proc->pid;
         }
 
-        bool Scheduler::ProcessSetupStack(char** argv, int argc, char** envp, int envc, void* stack_base, uint64_t* rsp) {
+        bool Scheduler::ProcessSetupStack(char** argv, int argc, char** envp, int envc, void* stack_base, uint64_t entry, uint64_t phdr, uint64_t phent, uint64_t phnum, uint64_t* rsp) {
             // We save the pointers to the args/env we put on the stack here, to quickly push them
             char** argv_stack_pos = new char*[argc];
             char** envp_stack_pos = new char*[envc];
@@ -218,8 +240,18 @@ namespace Kernel {
             size_t stack_pad_size = ((size_t)proc_stack & 0xF);
             proc_stack = (uint64_t*)((uint8_t*)(proc_stack) -  stack_pad_size);
 
-            // TODO: aux vector
+            // We now create the AUX vector
+            // First we push the ending of it
             push_to_stack(0);
+            // Now we add phdr, phent, phnum and entry
+            push_to_stack(phdr);
+            push_to_stack(ELF::ElfAuxVector::AT_PHDR);
+            push_to_stack(phent);
+            push_to_stack(ELF::ElfAuxVector::AT_PHENT);
+            push_to_stack(phnum);
+            push_to_stack(ELF::ElfAuxVector::AT_PHNUM);
+            push_to_stack(entry);
+            push_to_stack(ELF::ElfAuxVector::AT_ENTRY);
 
             // Push the env shit
             push_to_stack(0);

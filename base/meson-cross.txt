@@ -5,7 +5,7 @@ cpu = 'x86_64'
 endian = 'little'
 
 [binaries]
-c = prefix + 'x86_64-hos-gcc'
-cpp = prefix + 'x86_64-hos-g++'
+c = [ 'ccache', prefix + 'x86_64-hos-gcc' ]
+cpp = [ 'ccache', prefix + 'x86_64-hos-g++' ]
 ar = prefix + 'x86_64-hos-ar'
 strip = prefix + 'x86_64-hos-strip'

@@ -25,6 +25,10 @@ public:
     // Returns true if valid and the read succeded, false if it failed.
     bool readHeader();
 
+    // Performs ELF Relocations.
+    // Assumes the ELF is currently loaded in this page table.
+    void relocate(void* load_base);
+
     enum ObjectFileType {
         ET_NONE = 0,
         ET_REL,
@@ -41,6 +45,32 @@ public:
         PT_NOTE,
         PT_SHLIB,
         PT_PHDR
+    };
+
+    enum SectionHeaderType {
+        SHT_NULL = 0,
+        SHT_PROGBITS,
+        SHT_SYMTAB,
+        SHT_STRTAB,
+        SHT_RELA,
+        SHT_HASH,
+        SHT_DYNAMIC,
+        SHT_NOTE,
+        SHT_NOBITS,
+        SHT_REL,
+        SHT_SHLIB,
+        SHT_DYNSYM
+    };
+
+    enum ElfAuxVector {
+        AT_NULL = 0,
+        AT_PHDR = 3,
+        AT_PHENT = 4,
+        AT_PHNUM = 5,
+        AT_ENTRY = 9,
+        AT_EXECPATH = 15,
+        AT_RANDOM = 25,
+        AT_EXECFN = 31
     };
 
     ObjectFileType file_object_type;
@@ -83,7 +113,14 @@ public:
         void* data;
     };
     
+    struct Relocations {
+        uint64_t file_begin;
+        uint64_t size;
+        uint64_t type;
+    };
+
     Vector<Section*> sections;
+    Vector<Relocations*> relocations;
 
 private:
     
