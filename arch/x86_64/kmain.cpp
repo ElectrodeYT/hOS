@@ -58,6 +58,7 @@ namespace Kernel {
         uint8_t* init_elf = new uint8_t[init_size];
         VFS::the().pread(init_fd, init_elf, init_size, 0, -1);
         VFS::the().close(init_fd, -1);
+        PM::PrintMemUsage();
         Processes::Scheduler::the().CreateProcess(init_elf, init_size, "init", "/", true);
         Processes::Scheduler::the().KillCurrentProcess();
         for(;;);
@@ -81,6 +82,14 @@ namespace Kernel {
         }
 
         KLog::the().printf("Starting hOS Kernel\n\r");
+        KLog::the().printf("Physical RAM available: %iMb\n\r", (PM::PageCount() * 4096) / (1024 * 1024));
+
+        for(;;) {
+            uint8_t* waste = new uint8_t[128];
+            waste[127] = 0xAA;
+            waste[0] = 0xBB;
+            PM::PrintMemUsage();
+        }
 
         // Initialize scheduler
         Processes::Scheduler::the().Init();

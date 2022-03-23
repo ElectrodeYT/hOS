@@ -187,6 +187,8 @@ namespace PM {
     void PrintMemUsage() {
         KLog::the().printf("PM: used pages %i, free pages %i, used mem %iMb\n\r", used_pages, free_pages, (used_pages * 4096) / (1024 * 1024));
     }
+
+    uint64_t PageCount() { return free_pages + used_pages; }
 }
 
 }

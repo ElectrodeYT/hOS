@@ -19,6 +19,8 @@ namespace Kernel {
 
         // Dump the current amount of used pages to KLog.
         void PrintMemUsage();
+        // Return the amount of pages of RAM.
+        uint64_t PageCount();
     }
 }
 #endif
