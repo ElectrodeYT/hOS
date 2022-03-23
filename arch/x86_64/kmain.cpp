@@ -84,13 +84,6 @@ namespace Kernel {
         KLog::the().printf("Starting hOS Kernel\n\r");
         KLog::the().printf("Physical RAM available: %iMb\n\r", (PM::PageCount() * 4096) / (1024 * 1024));
 
-        for(;;) {
-            uint8_t* waste = new uint8_t[128];
-            waste[127] = 0xAA;
-            waste[0] = 0xBB;
-            PM::PrintMemUsage();
-        }
-
         // Initialize scheduler
         Processes::Scheduler::the().Init();
 
