@@ -74,6 +74,13 @@ void KLog::printf(const char* fmt, ...) {
     release(&mutex);
 }
 
+void KLog::userDebug(const char* str) {
+    puts("\033[33m[uDbg] \033[37m");
+    puts(str);
+    puts("\033[37m\n\r");
+    release(&mutex);
+}
+
 void KLog::puts(const char* str) {
     for(size_t i = 0; i < callbacks.size(); i++) {
         callbacks.at(i)(arguments.at(i), str);

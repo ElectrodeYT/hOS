@@ -9,7 +9,7 @@ namespace Kernel {
     class KLog {
     public:
         void printf(const char* fmt, ...);
-
+        void userDebug(const char* str);
         void registerCallback(void (*callback)(void*, const char*), void* arg) {
             acquire(&mutex);
             callbacks.push_back(callback);

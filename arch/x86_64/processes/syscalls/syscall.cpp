@@ -31,7 +31,7 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
             }
             // memcopy((void*)regs->rbx, str, regs->rcx);
             str[regs->rcx] = '\0';
-            KLog::the().printf(str);
+            KLog::the().userDebug(str);
             delete str;
             break;
         }
