@@ -1,2 +1,6 @@
 hos todo:
-- figure out why mlibc ctors dont work
+- figure out why mlibc ctors dont work (calls to null after linker calls _start)
+- make VFS better (can at least reduce code waste by making some many used things into functions)
+- rewrite scheduler (slow, shit)
+- rewrite interrupt system (slow, slightly less shit than scheduler)
+- rewrite timer system (barely works, uses PIT, basically just about good enough for scheduler)
