@@ -43,14 +43,14 @@ bool ELF::readHeader() {
     file_section_header_count = read16(curr_pointer); curr_pointer += 2;
     file_section_name_string_table_index = read16(curr_pointer); curr_pointer += 2;
 
-    //Kernel::KLog::the().printf("Object file type: ");
+    /* Kernel::KLog::the().printf("Object file type: ");
     switch(file_object_type) {
         case ET_NONE: Kernel::KLog::the().printf("ET_NONE\r\n"); break;
         case ET_REL: Kernel::KLog::the().printf("ET_REL\r\n"); break;
         case ET_EXEC: Kernel::KLog::the().printf("ET_EXEC\r\n"); break;
         case ET_DYN: Kernel::KLog::the().printf("ET_DYN\r\n"); break;
         case ET_CORE: Kernel::KLog::the().printf("ET_CORE\r\n"); break;
-    }
+    } */
 
     //Kernel::KLog::the().printf("Header size: %x\r\nEntry point: %x\r\nProgram header offset: %x\r\nSection header offset: %x\r\n", file_header_size, file_entry, file_program_header_offset, file_section_header_offset);
 
@@ -77,6 +77,10 @@ bool ELF::readHeader() {
         new_section->execute = flags & 0b1;
         new_section->loadable = type == 1;
         sections.push_back(new_section);
+        // ELFs should include a segment that maps the beginning of the ELF file at the base address
+        // Find it and save its virtual address
+        if(new_section->file_begin == 0) { file_base = new_section->vaddr; }
+
         //Kernel::KLog::the().printf("Segment %i: vaddr %x, file size %x, segment size %x, type %i\r\n", i, vaddr, size_in_file, size_in_memory, type);
         //Kernel::KLog::the().printf("Offset in file: %x\r\n", offset_in_file);
     
@@ -91,7 +95,7 @@ bool ELF::readHeader() {
             interpreterPath = new char[size_in_file + 1];
             memset(interpreterPath, 0, size_in_file + 1);
             new_section->copy_out(interpreterPath);
-            Kernel::KLog::the().printf("Interpreter: %s\n\r", interpreterPath);
+            // Kernel::KLog::the().printf("Interpreter: %s\n\r", interpreterPath);
         }
     }
 

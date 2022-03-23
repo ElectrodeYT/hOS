@@ -110,6 +110,8 @@ public:
     uint16_t file_section_header_count;
     uint16_t file_section_name_string_table_index;
 
+    uint64_t file_base = 0;
+
     bool isDynamic = false;
     char* interpreterPath = NULL;
 
