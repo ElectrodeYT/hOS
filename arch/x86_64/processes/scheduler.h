@@ -7,6 +7,8 @@
 #include <interrupts.h>
 #include <CPP/string.h>
 #include <stddef.h>
+#include <processes/elf.h>
+
 
 namespace Kernel {
     namespace Processes {
@@ -97,6 +99,8 @@ namespace Kernel {
 
             // Setup stack of process
             bool ProcessSetupStack(char** argv, int argc, char** envp, int envc, void* stack_base, uint64_t entry, uint64_t phdr, uint64_t phent, uint64_t phnum, uint64_t* rsp);
+            // Map a ELF file into the process space, with optional offset
+            void MapELF(ELF* elf, Process* new_proc, uint64_t offset, bool is_interpreter);
 
             // Get the next available PID
             int64_t GetNextPid() {

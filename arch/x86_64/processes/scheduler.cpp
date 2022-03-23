@@ -7,7 +7,6 @@
 #include <panic.h>
 #include <CPP/string.h>
 #include <early-boot.h>
-#include <processes/elf.h>
 #include <hardware/instructions.h>
 #include <processes/syscalls/syscall.h>
 #include <errno.h>
@@ -112,42 +111,12 @@ namespace Kernel {
             // Switch into new page table
             SwitchPageTables(new_proc->page_table);
 
-            // We now need to loop through all the created segments, and see if we
-            // need to make mappings for them
-            for(size_t i = 0; i < elf->sections.size(); i++) {
-                ELF::Section* section = elf->sections.at(i);
-                if(section->loadable) {
-                    // TODO: correct permissions
-                    VM::VMObject* mapping = new VM::VMObject(true, false);
-                    mapping->base = section->vaddr & ~(0xFFF);
-                    mapping->size = round_to_page_up(section->segment_size);
-
-                    if(is_interpreter) {
-                        mapping->base += 0x40000000;
-                    } else if(mapping->base == 0) {
-                        return false;
-                    }
-                    
-                    KLog::the().printf("Mapping for ELF segment %i: base %x, size %x\r\n", i, mapping->base, mapping->size);
-
-                    // Allocate it
-                    size_t page_count = 0;
-                    for(uint64_t i = 0; i < mapping->size; i += 4096) {
-                        uint64_t phys = PM::AllocatePages();
-                        // Map page
-                        VM::MapPage(phys, mapping->base + i, 0b111);
-                        page_count++;
-                    }
-
-                    // Now copy to it
-                    section->copy_out((void*)mapping->base);
-                    new_proc->mappings.push_back(mapping);
-                }
-            }
+            MapELF(elf, new_proc, is_interpreter ? 0x40000000 : 0, is_interpreter);
 
             // If we loaded the interpreter, we can now perform relocations on the ELF binary
             if(is_interpreter) {
-                // elf->relocate((void*)0x40000000);
+                //KLog::the().printf("Relocating interpreter\n\r");
+                //elf->relocate((void*)0x40000000);
             }
 
             // Create main stack
@@ -162,10 +131,12 @@ namespace Kernel {
             if(is_interpreter) {
                 ELF* real_elf = new ELF(data, length); // original elf file
                 real_elf->readHeader();
-                uint64_t elf_base = SyscallHandler::the().mmap(new_proc, length, NULL, 0x9000000);
-                memcopy(data, (void*)elf_base, length);
+                
+                // Map the original ELF to memory
+                MapELF(real_elf, new_proc, real_elf->file_base ? 0 : 0x4000000, false);
+                
                 aux_entry = real_elf->file_entry;
-                aux_phdr = elf_base + real_elf->file_program_header_offset;
+                aux_phdr = real_elf->file_base + real_elf->file_program_header_offset;
                 aux_phent = real_elf->file_program_header_entry_size;
                 aux_phnum = real_elf->file_program_header_count;
             }
@@ -272,6 +243,39 @@ namespace Kernel {
 
             *rsp = (uint64_t)proc_stack;
             return true;
+        }
+
+        void Scheduler::MapELF(ELF* elf, Process* new_proc, uint64_t offset, bool is_interpreter) {
+            // We now need to loop through all the created segments, and see if we
+            // need to make mappings for them
+            for(size_t i = 0; i < elf->sections.size(); i++) {
+                ELF::Section* section = elf->sections.at(i);
+                if(section->loadable) {
+                    // TODO: correct permissions
+                    VM::VMObject* mapping = new VM::VMObject(true, false);
+                    mapping->base = (section->vaddr + offset) & ~(0xFFF);
+                    mapping->size = round_to_page_up(section->segment_size);
+
+                    if(mapping->base == 0) { continue; }
+
+                    KLog::the().printf("Mapping for ELF segment %i: base %x, size %x\r\n", i, mapping->base, mapping->size);
+
+                    // Allocate it
+                    size_t page_count = 0;
+                    for(uint64_t i = 0; i < mapping->size; i += 4096) {
+                        uint64_t phys = PM::AllocatePages();
+                        // Map page
+                        VM::MapPage(phys, mapping->base + i, 0b111);
+                        page_count++;
+                    }
+
+                    // Now copy to it
+                    section->copy_out((void*)mapping->base);
+                    new_proc->mappings.push_back(mapping);
+                }
+            }
+
+            (void)is_interpreter;
         }
 
         int64_t Scheduler::CreateProcess(uint8_t* data, size_t length, const char* name, const char* working_dir, bool init) {
