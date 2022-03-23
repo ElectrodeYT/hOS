@@ -38,8 +38,11 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
         // mmap
         case 2: {
             uint64_t actual;
+            // uint64_t wanted_pointer = regs->rcx;
             regs->rax = mmap(this_proc, regs->rbx, &actual, regs->rcx, regs->rdx);
-            if(regs->rax & (1UL << 63)) { regs->rbx = actual; }
+            // KLog::the().printf("syscalls: mmap: wanted pointer %x, wanted size %x, got pointer %x, got size %x\n\r", regs->rcx, regs->rbx, regs->rax, actual);
+            if(!(regs->rax & (1UL << 63))) { regs->rbx = actual; }
+            // KLog::the().printf("syscalls: rbx=%x\n\r", regs->rbx);
             break;
         }
         // munmap
