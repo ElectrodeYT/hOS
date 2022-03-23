@@ -1,9 +1,5 @@
 # hOS
-OS Project. Dont expect much lol.
-
-64 bit x86
-
-written in c++.
+A OS Kernel. Uses mlibc. Is 64-bit.
 
 # Philosophy
 Has changed a lot during development, but at this point i want it to become a monolithic/hybrid kernel, using something like UBI/EDI/CDI for "less important" drivers (probably wont ever happen)
