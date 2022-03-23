@@ -17,7 +17,7 @@
 
 namespace Kernel {
     void kInit2(void* arg) {
-        KLog::the().printf("kInit2: started init");
+        KLog::the().printf("kInit2: started init\n\r");
         // We mount the first partition we find
         for(uint64_t mount_device = 0; true; mount_device++) {
             // Attempt to get the base device
@@ -80,8 +80,7 @@ namespace Kernel {
             }
         }
 
-        KLog::the().printf("hello world!\n\r");
-        KLog::the().printf("the number 42: %i\n\r", 42);
+        KLog::the().printf("Starting hOS Kernel\n\r");
 
         // Initialize scheduler
         Processes::Scheduler::the().Init();
@@ -96,11 +95,7 @@ namespace Kernel {
         // We have to do this here because of our shitty timing and scheduler
         // TODO: improve timer/add scheduler sleep support
         PS2::the().Init();
-
-        // Spawn bootstrap processes
-        //for(size_t i = 0; i < mod_count; i++) {
-        //    Processes::Scheduler::the().CreateProcess(modules[i], module_sizes[i], module_names[i]);
-        //}
+        
         // Spawn kernel tasks
         Processes::Scheduler::the().CreateKernelTask(kInit2, NULL, 4);
         // Schedule
