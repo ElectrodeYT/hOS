@@ -42,6 +42,29 @@ int Stivale2GraphicsTerminal::write_drv(const char* buf, size_t len) {
                     }
                     break;
                 }
+                case '\033': {
+                    // TODO: actually check the buffer length
+                    // TODO: make a good version of this
+                    i++;
+                    if(buf[i] != '[') { continue; }
+                    i++;
+                    if(buf[i] != '3') { continue; }
+                    i++;
+                    if(buf[i + 1] != 'm') { continue; }
+                    switch(buf[i]) {
+                        case '0': { fore = 0xFF000000; break; }
+                        case '1': { fore = 0xFFAA0000; break; }
+                        case '2': { fore = 0xFF00AA00; break; }
+                        case '3': { fore = 0xFFAA5500; break; }
+                        case '4': { fore = 0xFF0000AA; break; }
+                        case '5': { fore = 0xFFAA00AA; break; }
+                        case '6': { fore = 0xFF00AAAA; break; }
+                        case '7':
+                        default: { fore = 0xFFAAAAAA; break; }
+                    }
+                    i++;
+                    break;
+                }
                 default: {
                     char c = buf[i];
                     // Calculate offset to top left of char

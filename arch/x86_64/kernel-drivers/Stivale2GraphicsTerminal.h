@@ -35,7 +35,7 @@ private:
     const size_t char_width = 8;
     const size_t char_height = 8;
 
-    uint32_t fore = 0xFFFFFFFF;
+    uint32_t fore = 0xFFAAAAAA;
 
     bool supported_fb = false;
 

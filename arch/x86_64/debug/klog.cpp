@@ -9,7 +9,7 @@ namespace Kernel {
 void KLog::printf(const char* fmt, ...) {
     // This printf is very simple, so we dont really care much about it
     acquire(&mutex);
-    puts("[KLog] ");
+    puts("\033[35m[KLog] \033[37m");
     va_list args;
     va_start(args, fmt);
     char* ptr = (char*)fmt;
@@ -70,6 +70,7 @@ void KLog::printf(const char* fmt, ...) {
         (*char_buf_ptr) = 0;
         puts(char_buf);
     }
+    puts("\033[37m");
     release(&mutex);
 }
 
