@@ -3,4 +3,5 @@ target remote | qemu-system-x86_64 -drive format=raw,file=hOS.img -S -gdb stdio 
 break _start
 set print pretty
 set disassemble-next-line on
+layout asm
 continue
