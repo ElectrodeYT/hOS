@@ -1,6 +1,7 @@
 *.o
 *.elf
 *.img
+.gdb_history
 cross
 compiler/build-gcc
 compiler/build-binutils
