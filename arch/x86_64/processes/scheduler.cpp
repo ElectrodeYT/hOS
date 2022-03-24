@@ -115,8 +115,8 @@ namespace Kernel {
 
             // If we loaded the interpreter, we can now perform relocations on the ELF binary
             if(is_interpreter) {
-                //KLog::the().printf("Relocating interpreter\n\r");
-                //elf->relocate((void*)0x40000000);
+                KLog::the().printf("Relocating interpreter\n\r");
+                elf->relocate((void*)0x40000000);
             }
 
             // Create main stack
@@ -144,6 +144,8 @@ namespace Kernel {
             // Setup stack
             uint64_t proc_rsp;
             ProcessSetupStack(argv, argc, envp, envc, (void*)(stack_base + stack_size - 8), aux_entry, aux_phdr, aux_phent, aux_phnum, &proc_rsp);
+
+            SyscallHandler::the().mmap(new_proc, 10, NULL);
 
             // The sections have been copied out, we can now switch the page table back
             SwitchPageTables(curr_page_table);
@@ -253,8 +255,11 @@ namespace Kernel {
                 if(section->loadable) {
                     // TODO: correct permissions
                     VM::VMObject* mapping = new VM::VMObject(true, false);
-                    mapping->base = (section->vaddr + offset) & ~(0xFFF);
+                    // We use the ELF base here for a bit
+                    mapping->base = (section->vaddr + offset);
                     mapping->size = round_to_page_up(section->segment_size);
+
+                    uint64_t mapping_base_aligned = mapping->base & ~(0xFFF);
 
                     if(mapping->base == 0) { continue; }
 
@@ -265,12 +270,14 @@ namespace Kernel {
                     for(uint64_t i = 0; i < mapping->size; i += 4096) {
                         uint64_t phys = PM::AllocatePages();
                         // Map page
-                        VM::MapPage(phys, mapping->base + i, 0b111);
+                        VM::MapPage(phys, mapping_base_aligned + i, 0b111);
                         page_count++;
                     }
 
                     // Now copy to it
                     section->copy_out((void*)mapping->base);
+                    // Change the base to the physical base we actually used for this
+                    mapping->base = mapping_base_aligned;
                     new_proc->mappings.push_back(mapping);
                 }
             }
