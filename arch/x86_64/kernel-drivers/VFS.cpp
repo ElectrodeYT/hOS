@@ -28,48 +28,57 @@ bool VFS::attemptMountRoot(VFSDriver* driver) {
     return true;
 }
 
+VFS::fs_node* VFS::iterateFromDescriptor(const char* working, fs_node* node, int64_t* err) {
+    fs_node* curr = node;
+    // We need to iterate over the working path first
+    if(working[0] != '/') { *err = -EINVAL; return NULL; }
+    char* curr_folder_name = NULL;
+    char* curr_working_index = (char*)(working + 1);
+    while(*curr_working_index) {
+        // Get the size of this file name
+        size_t char_len = getLenUntilEndOfPathPart(curr_working_index);
+        if(char_len > 256) { *err = -ENAMETOOLONG; return NULL;  }
+        curr_folder_name = new char[char_len + 1];
+        memset(curr_folder_name, 0, char_len + 1);
+        memcopy(curr_working_index, curr_folder_name, char_len);
+        fs_node* next = curr->finddir(curr_folder_name);
+        delete curr_folder_name;
+        if(!next) { *err = -EINVAL; }
+        if(!next->isDir()) { *err = -ENOTDIR; return NULL;  }
+        curr = next;
+        curr_working_index += char_len;
+    }
+    return curr;
+}
+
 int VFS::attemptMountOnFolder(const char* working, const char* folder, VFSDriver* driver) {
+    acquire(&mutex);
     fs_node* curr = root_node;
     // Check if we have a relative path
     if(folder[0] != '/') {
-        // We need to iterate over the working path first
-        if(working[0] != '/') { return -EINVAL; }
-        char* curr_folder_name = NULL;
-        char* curr_working_index = (char*)(working + 1);
-        while(*curr_working_index) {
-            // Get the size of this file name
-            size_t char_len = getLenUntilEndOfPathPart(curr_working_index);
-            if(char_len > 256) { return -ENAMETOOLONG; }
-            curr_folder_name = new char[char_len + 1];
-            memset(curr_folder_name, 0, char_len + 1);
-            memcopy(curr_working_index, curr_folder_name, char_len);
-            fs_node* next = curr->finddir(curr_folder_name);
-            delete curr_folder_name;
-            if(!next) { return -EINVAL; }
-            if(!next->isDir()) { return -ENOTDIR; }
-            curr = next;
-            curr_working_index += char_len;
-        }
+        int64_t err = 0;
+        iterateFromDescriptor(working, curr, &err);
+        if(err) { release(&mutex); return err; }
     }
     // Iterate over the file relative path
     char* curr_folder_name = NULL;
     char* curr_file_index = (char*)folder;
     if(*curr_file_index == '/') { curr_file_index++; }
     while(*curr_file_index) {
-        if(!curr->isDir()) { return -ENOTDIR; }
+        if(!curr->isDir()) { release(&mutex); return -ENOTDIR; }
         // Get the size of this file name
         size_t char_len = getLenUntilEndOfPathPart(curr_file_index);
-        if(char_len > 256) { return -ENAMETOOLONG; }
+        if(char_len > 256) { release(&mutex); return -ENAMETOOLONG; }
         curr_folder_name = new char[char_len + 1];
         memset(curr_folder_name, 0, char_len + 1);
         memcopy(curr_file_index, curr_folder_name, char_len);
         fs_node* next = root_node->finddir(curr_folder_name);
         delete curr_folder_name;
-        if(!next) { return -EINVAL; }
+        if(!next) { release(&mutex); return -EINVAL; }
         curr = next;
         curr_file_index += char_len;
     }
-    if(!curr->isDir()) { return false; }
+    if(!curr->isDir()) { release(&mutex); return false; }
     fs_node* mount = driver->mount();
     if(mount) {
         // We can mount this driver, overwrite the curr node
@@ -80,8 +89,10 @@ int VFS::attemptMountOnFolder(const char* working, const char* folder, VFSDriver
         } else {
             KLog::the().printf("VFS: mounted %s on /%s\n\r", driver->driverName(), folder);    
         }
+        release(&mutex);
         return true;
     }
+    release(&mutex);
     return false;
 }
 

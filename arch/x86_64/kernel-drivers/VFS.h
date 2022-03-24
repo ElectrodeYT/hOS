@@ -71,6 +71,8 @@ public:
     };
 private:
 
+    fs_node* iterateFromDescriptor(const char* working, fs_node* node, int64_t* err);
+
     struct fileDescriptor {
         int64_t id;
         int64_t pid;
