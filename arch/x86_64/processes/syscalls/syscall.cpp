@@ -97,7 +97,7 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
 
 uint64_t SyscallHandler::mmap(Processes::Process* process, uint64_t requested_size, uint64_t* actual_size, uint64_t requested_pointer, uint64_t flags) {
     uint64_t size = round_to_page_up(requested_size);
-    uint64_t current_map = 0x400000;
+    uint64_t current_map = 0x6000000;
     uint64_t req_pointer_page = requested_pointer & ~(0xFFF);
     if(req_pointer_page) { current_map = req_pointer_page; } // If a pointer was requested, then we force current_map to the page that was requested
 

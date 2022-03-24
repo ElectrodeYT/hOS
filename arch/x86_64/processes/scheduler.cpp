@@ -268,6 +268,10 @@ namespace Kernel {
                     // Allocate it
                     size_t page_count = 0;
                     for(uint64_t i = 0; i < mapping->size; i += 4096) {
+                        if(VM::GetPhysical(mapping_base_aligned + i)) {
+                            KLog::the().printf("Page is already mapped for this segment; this will explode badly later. fix me\n\r");
+                            continue;
+                        }
                         uint64_t phys = PM::AllocatePages();
                         // Map page
                         VM::MapPage(phys, mapping_base_aligned + i, 0b111);

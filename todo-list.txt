@@ -1,5 +1,6 @@
 hos todo:
-- figure out why mlibc ctors dont work (calls to null after linker calls _start)
+// - figure out why mlibc ctors dont work (calls to null after linker calls _start)
+- figure out why the GOT is zeroed (something to do with mlibc dynamic linking not relocating the JUMP_SLOT bits)
 - make VFS better (can at least reduce code waste by making some many used things into functions)
 - rewrite scheduler (slow, shit)
 - rewrite interrupt system (slow, slightly less shit than scheduler)

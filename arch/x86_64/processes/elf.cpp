@@ -75,7 +75,7 @@ bool ELF::readHeader() {
         new_section->read = flags & 0b100;
         new_section->write = flags & 0b10;
         new_section->execute = flags & 0b1;
-        new_section->loadable = type == 1;
+        new_section->loadable = (type == 1) || (type == 2);
         sections.push_back(new_section);
         // ELFs should include a segment that maps the beginning of the ELF file at the base address
         // Find it and save its virtual address
