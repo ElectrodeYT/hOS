@@ -112,7 +112,7 @@ int Stivale2GraphicsTerminal::write_drv(const char* buf, size_t len) {
         memcopy(fb_buffer + (y * pitch) + (top_x * (bpp / 8)), fb + (y * pitch) + (top_x * (bpp / 8)), length * (bpp / 8));
     }
     release(&mutex);
-    return 0;
+    return len;
 }
 
 void Stivale2GraphicsTerminal::CopyUpOne() {
