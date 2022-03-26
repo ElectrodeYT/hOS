@@ -102,24 +102,24 @@ int64_t VFS::open(const char* working, const char* file, int64_t pid) {
     // Check if we have a relative path
     if(file[0] != '/') {
         // We need to iterate over the working path first
-        if(working[0] != '/') { return -EINVAL; }
+        if(working[0] != '/') { release(&mutex); return -EINVAL; }
         char* curr_folder_name = NULL;
         char* curr_working_index = (char*)(working + 1);
         while(*curr_working_index) {
             // Get the size of this file name
             size_t char_len = getLenUntilEndOfPathPart(curr_working_index);
-            if(char_len > 256) { return -ENAMETOOLONG; }
+            if(char_len > 256) { release(&mutex); return -ENAMETOOLONG; }
             curr_folder_name = new char[char_len + 1];
             memset(curr_folder_name, 0, char_len + 1);
             memcopy(curr_working_index, curr_folder_name, char_len);
             fs_node* next = curr->finddir(curr_folder_name);
             delete curr_folder_name;
-            if(!next) { return -EINVAL; }
-            if(!next->isDir()) { return -ENOTDIR; }
+            if(!next) { release(&mutex); return -EINVAL; }
+            if(!next->isDir()) { release(&mutex); return -ENOTDIR; }
             curr = next;
             curr_working_index += char_len;
             if(*curr_working_index == '/') {
-                if(!curr->isDir()) { return -ENOTDIR; }
+                if(!curr->isDir()) { release(&mutex); return -ENOTDIR; }
                 curr_working_index++;
             }
         }
@@ -128,26 +128,26 @@ int64_t VFS::open(const char* working, const char* file, int64_t pid) {
     char* curr_folder_name = NULL;
     char* curr_file_index = (char*)file;
     if(*curr_file_index == '/') { curr_file_index++; }
-    if(*curr_file_index == 0) { return -EISDIR; }
+    if(*curr_file_index == 0) { release(&mutex); return -EISDIR; }
     while(*curr_file_index) {
-        if(!curr->isDir()) { return -ENOTDIR; }
+        if(!curr->isDir()) { release(&mutex); return -ENOTDIR; }
         // Get the size of this file name
         size_t char_len = getLenUntilEndOfPathPart(curr_file_index);
-        if(char_len > 256) { return -ENAMETOOLONG; }
+        if(char_len > 256) { release(&mutex); return -ENAMETOOLONG; }
         curr_folder_name = new char[char_len + 1];
         memset(curr_folder_name, 0, char_len + 1);
         memcopy(curr_file_index, curr_folder_name, char_len);
         fs_node* next = curr->finddir(curr_folder_name);
         delete curr_folder_name;
-        if(!next) { return -EINVAL; }
+        if(!next) { release(&mutex); return -EINVAL; }
         curr = next;
         curr_file_index += char_len;
         if(*curr_file_index == '/') {
-            if(!curr->isDir()) { return -ENOTDIR; }
+            if(!curr->isDir()) { release(&mutex); return -ENOTDIR; }
             curr_file_index++;
         }
     }
-    if(curr->isDir()) { return -EISDIR; }
+    if(curr->isDir()) { release(&mutex); return -EISDIR; }
     // Create a new file descriptor for this file
     int64_t file_desc = 0;
     for(int64_t i = 0; i < (int64_t)opened_files.size(); i++) {
@@ -158,7 +158,6 @@ int64_t VFS::open(const char* working, const char* file, int64_t pid) {
     fd->id = file_desc;
     fd->pid = pid;
     fd->node = curr;
-    fd->seek = 0;
     opened_files.push_back(fd);
     release(&mutex);
     return file_desc;
@@ -171,7 +170,7 @@ int VFS::close(int64_t file, int64_t pid) {
         if(opened_files.at(i)->id == file) {
             // If we are not the kernel (pid -1) then we also check the pid
             if(pid != -1 && opened_files.at(i)->pid != pid) {
-                return -EBADF;
+            //    return -EBADF;
             }
             delete opened_files.at(i);
             opened_files.remove(i);
@@ -186,42 +185,36 @@ int VFS::close(int64_t file, int64_t pid) {
 int VFS::pread(int64_t file, void* buf, size_t nbyte, size_t offset, int64_t pid) {
     // Find the fd
     fs_node* node = NULL;
-    fileDescriptor* fd = NULL;
     for(size_t i = 0; i < opened_files.size(); i++) {
         if(opened_files.at(i)->id == file) {
             // If we are not the kernel (pid -1) then we also check the pid
             if(pid != -1 && opened_files.at(i)->pid != pid) {
-                return -EBADF;
+            //    return -EBADF;
             }
             node = opened_files.at(i)->node;
-            fd = opened_files.at(i);
             break;
         }
     }
     if(!node) { return -EBADF; }
-    int ret = node->read(buf, nbyte, offset + fd->seek);
-    if(ret > 0) { fd->seek += ret; }
+    int ret = node->read(buf, nbyte, offset);
     return ret;
 }
 
 int VFS::pwrite(int64_t file, void* buf, size_t nbyte, size_t offset, int64_t pid) {
     // Find the fd
     fs_node* node = NULL;
-    fileDescriptor* fd = NULL;
     for(size_t i = 0; i < opened_files.size(); i++) {
         if(opened_files.at(i)->id == file) {
             // If we are not the kernel (pid -1) then we also check the pid
             if(pid != -1 && opened_files.at(i)->pid != pid) {
-                return -EBADF;
+            //    return -EBADF;
             }
             node = opened_files.at(i)->node;
-            fd = opened_files.at(i);
             break;
         }
     }
     if(!node) { return -EBADF; }
-    int ret = node->write(buf, nbyte, offset + fd->seek);
-    if(ret > 0) { fd->seek += ret; }
+    int ret = node->write(buf, nbyte, offset);
     return ret;
 }
 
@@ -334,7 +327,7 @@ int EchFSDriver::read(VFS::fs_node* node, void* buf, size_t size, size_t offset)
 
     uint64_t end = offset + size;
     // Check if we have the blocks we need buffered
-    if(file->known_blocks.size() < (end % block_size) + 1) {
+    if(file->known_blocks.size() < (end / block_size) + 1) {
         // Special case if we have no blocks buffered
         if(file->known_blocks.size() == 0) {
             uint64_t file_dir_entry = file->dir_entry;
@@ -358,6 +351,10 @@ int EchFSDriver::read(VFS::fs_node* node, void* buf, size_t size, size_t offset)
                 size = ((curr_block - 1) * block_size) - offset;
                 break;
             }
+            // Debug loop for if curr_block_id == 0
+            if(curr_block_id == 0) { 
+                KLog::the().printf("debug check: curr_block_id == 0"); for(;;);
+            }
             file->known_blocks.push_back(curr_block_id);
         }
     }
@@ -373,7 +370,7 @@ int EchFSDriver::read(VFS::fs_node* node, void* buf, size_t size, size_t offset)
         // Calculate the amount of data we need from this block
         uint64_t block_len = ((block_size - first_block_offset) <= remaining_len) ? (block_size - first_block_offset) : remaining_len;
         // Read this data into the buffer
-        block->read(curr_buf, block_len, block_id * block_size);
+        block->read(curr_buf, block_len, (block_id * block_size) + first_block_offset);
         remaining_len -= block_len;
         curr += block_len;
         curr_buf += block_len;

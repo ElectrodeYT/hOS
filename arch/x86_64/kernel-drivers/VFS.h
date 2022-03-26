@@ -77,8 +77,6 @@ private:
         int64_t id;
         int64_t pid;
         fs_node* node;
-
-        int64_t seek;
     };
 
     Vector<fileDescriptor*> opened_files;
