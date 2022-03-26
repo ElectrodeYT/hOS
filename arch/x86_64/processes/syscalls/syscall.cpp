@@ -4,7 +4,9 @@
 #include <processes/scheduler.h>
 #include <mem/PM/physalloc.h>
 #include <mem/VM/virtmem.h>
+#include <kernel-drivers/VFS.h>
 #include <errno.h>
+#include <hardware/instructions.h>
 
 namespace Kernel {
 
@@ -56,6 +58,7 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
             KLog::the().printf("Process %i exited with code %i\r\n", Processes::Scheduler::the().curr_proc, regs->rbx);
             Processes::Scheduler::the().KillCurrentProcess();
             // We dont want interrupts in the scheduler lol
+            // TODO: yeah we might still one somewhat accurate timer interrupts (links in with timer system rework)
             asm volatile ("cli");
             Processes::Scheduler::the().Schedule(regs);
             asm volatile ("sti");
@@ -69,26 +72,62 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
         }
         // open
         case 6: {
-            KLog::the().printf("open\n\r");
-            regs->rax = -ENOSYS;
+            // Copy the string out
+            char* str = new char[regs->rcx + 1];
+            if(!this_proc->attemptCopyFromUser(regs->rbx, regs->rcx, str)) {
+                delete str;
+                regs->rax = -EINVAL;
+                break;
+            }
+            str[regs->rcx] = '\0';
+            // KLog::the().printf("open path=%s, flags=%i\n\r", str, regs->rdx);
+            regs->rax = open(str, regs->rdx, this_proc);
             break;
         }
         // close
         case 7: {
-            KLog::the().printf("close\n\r");
-            regs->rax = -ENOSYS;
+            // KLog::the().printf("close fd=%i\n\r", regs->rbx);
+            regs->rax = close(regs->rbx, this_proc);
             break;
         }
         // read
         case 8: {
-            KLog::the().printf("read\n\r");
-            regs->rax = -ENOSYS;
+            // KLog::the().printf("read %x:%x fd=%i count=%i\n\r", regs->rbx, regs->rcx, regs->rdx, regs->rcx);
+            // Create a kernel buffer to store data into
+            char* buffer = new char[regs->rcx];
+            regs->rax = read(regs->rdx, buffer, regs->rcx, this_proc);
+            if(regs->rax > 0) {
+                if(!this_proc->attemptCopyToUser(regs->rbx, regs->rcx, buffer)) { regs->rax = -EFAULT; }
+            }
+            delete buffer;
             break;
         }
         // write
         case 9: {
-            KLog::the().printf("write\n\r");
-            regs->rax = -ENOSYS;
+            // KLog::the().printf("write\n\r");
+            // Create a kernel buffer to store data into
+            char* buffer = new char[regs->rcx];
+            if(!this_proc->attemptCopyFromUser(regs->rbx, regs->rcx, buffer)) { regs->rax = -EFAULT; break; }
+            regs->rax = write(regs->rdx, buffer, regs->rcx, this_proc);
+            break;
+        }
+        // seek
+        case 10: {
+            // KLog::the().printf("seek fd=%i, offset=%i, whence=%i\n\r", regs->rbx, regs->rcx, regs->rdx);
+            regs->rax = seek(regs->rbx, regs->rcx, regs->rdx, this_proc);
+            break;
+        }
+        // set tcb
+        case 11: {
+            // KLog::the().printf("set_tcb pointer=%x\n\r", regs->rbx);
+            // Update FS base
+            this_proc->threads.at(Processes::Scheduler::the().curr_thread)->tcb_base = regs->rbx;
+            write_msr(0xC0000100, this_proc->threads.at(Processes::Scheduler::the().curr_thread)->tcb_base);
+            break;
+        }
+        // istty
+        case 12: {
+            
             break;
         }
         default: KLog::the().printf("Got invalid syscall: %x\r\n", (uint64_t)regs->rax); regs->rax = -ENOSYS; break;
@@ -132,5 +171,70 @@ uint64_t SyscallHandler::mmap(Processes::Process* process, uint64_t requested_si
 int SyscallHandler::fork(Interrupts::ISRRegisters* regs) {
     return Processes::Scheduler::the().ForkCurrent(regs);
 }
+
+int64_t SyscallHandler::open(const char* path, int flags, Processes::Process* process) {
+    int64_t global_fd = VFS::the().open(process->working_dir, path, process->pid);
+    int64_t process_fd;
+    if(global_fd >= 0) {
+        // Create translation table
+        process_fd = process->getLowestVFSInt();
+        process->fd_translation_table->push_back(new Processes::Process::VFSTranslation(global_fd, process_fd));
+    }
+    return global_fd >= 0 ? process_fd : global_fd;
+    (void)flags;
+}
+
+int64_t SyscallHandler::close(int64_t fd, Processes::Process* process) {
+    Processes::Process::VFSTranslation* vfs_translation = process->getGlobalFd(fd);
+    if(vfs_translation == NULL) { return -EBADF; }
+    int ret = VFS::the().close(vfs_translation->global_fd, process->pid);
+    if(ret != 0) { return ret; }
+    process->deleteFd(vfs_translation);
+    return 0;
+}
+
+int64_t SyscallHandler::read(int64_t fd, void* buf, size_t count, Processes::Process* process) {
+    Processes::Process::VFSTranslation* vfs_translation = process->getGlobalFd(fd);
+    if(vfs_translation == NULL) { return -EBADF; }
+    int64_t ret = VFS::the().pread(vfs_translation->global_fd, buf, count, vfs_translation->pos, process->pid);
+    if(ret > 0) { vfs_translation->pos += ret; }
+    return ret;
+}
+
+int64_t SyscallHandler::write(int64_t fd, void* buf, size_t count, Processes::Process* process) {
+    Processes::Process::VFSTranslation* vfs_translation = process->getGlobalFd(fd);
+    if(vfs_translation == NULL) { return -EBADF; }
+    int64_t ret = VFS::the().pwrite(vfs_translation->global_fd, buf, count, vfs_translation->pos, process->pid);
+    if(ret > 0) { vfs_translation->pos += ret; }
+    return ret;
+}
+
+int64_t SyscallHandler::seek(int64_t fd, size_t offset, int whence, Processes::Process* process) {
+    Processes::Process::VFSTranslation* vfs_translation = process->getGlobalFd(fd);
+    if(vfs_translation == NULL) { return -EBADF; }
+    switch(whence) {
+        // SEEK_SET
+        case 3: {
+            vfs_translation->pos = offset;
+            break;
+        }
+        // SEEK_CUR
+        case 1: {
+            vfs_translation->pos += offset;
+            break;
+        }
+        // SEEK_END
+        case 2: {
+            vfs_translation->pos = VFS::the().size(vfs_translation->global_fd, -1) - offset;
+            break;
+        }
+        default: {
+            return -EINVAL;
+        }
+    }
+    return vfs_translation->pos;
+    (void)process;
+}
+
 
 }
