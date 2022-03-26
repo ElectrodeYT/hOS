@@ -8,7 +8,7 @@ image := hOS.img
 # Stuff to import into image
 limine_config := ../../sysroot/boot/limine.cfg
 limine_sys := /usr/share/limine/limine.sys
-libc := ../../sysroot/usr/lib/libtiny-libc.a
+libc := ../../sysroot/usr/lib/libc.so
 ld := ../../sysroot/usr/lib/ld.so
 
 .PHONY: create-image qemu
