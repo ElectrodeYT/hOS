@@ -179,11 +179,18 @@ namespace Kernel {
             main_thread->syscall_stack_map = syscall_stack;
 
             // Initialize process FD table
-            new_proc->fd_translation_table = new Vector<Process::VFSTranslation>;
+            new_proc->fd_translation_table = new Vector<Process::VFSTranslation*>;
             new_proc->fd_translation_table_ref_count = new int;
 
             // Attach thread to new process
             new_proc->threads.push_back(main_thread);
+
+            // Init basic files
+            // (I/O)
+            // We basically just open /dev/tty1 three times lol
+            SyscallHandler::the().open("/dev/tty1", 3, new_proc);
+            SyscallHandler::the().open("/dev/tty1", 3, new_proc);
+            SyscallHandler::the().open("/dev/tty1", 3, new_proc);
 
             // Add process
             processes.push_back(new_proc);
@@ -544,6 +551,8 @@ namespace Kernel {
             regs->rflags = thread->regs.rflags;
             regs->cs = thread->regs.cs;
             regs->ss = thread->regs.ss;
+            // Update FS base
+            write_msr(0xC0000100, thread->tcb_base);
 
             // Update TSS RSP0
             tss_set_rsp0(thread->syscall_stack_map->base + thread->syscall_stack_map->size);
@@ -574,6 +583,19 @@ namespace Kernel {
             }
             // The memory this process used has been freed, delete the process itself
             SwitchPageTables(current_page_table);
+            // Check if we can destroy the translation table
+            if(proc->fd_translation_table_ref_count && proc->fd_translation_table) {
+                (*proc->fd_translation_table_ref_count)--;
+                if(!(*proc->fd_translation_table_ref_count)) {
+                    // Noone is using this translation table anymore, we can just yeet it
+                    for(size_t i = 0; i < proc->fd_translation_table->size(); i++) {
+                        VFS::the().close(proc->fd_translation_table->at(i)->global_fd, -1);
+                        delete proc->fd_translation_table->at(i);
+                    }
+                    delete proc->fd_translation_table;
+                    delete proc->fd_translation_table_ref_count;
+                }
+            }
             // TODO: destroy page table
             // probably has to be done in scheduler
             delete proc->name;

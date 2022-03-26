@@ -11,6 +11,8 @@ namespace Kernel {
         struct Thread {
             int tid;
             Hardware::Registers regs;
+            // TCB Base
+            uint64_t tcb_base;
             enum class BlockState {
                 Running = 0,
                 WaitingOnMessage,
@@ -81,13 +83,47 @@ namespace Kernel {
             char* working_dir;
 
             struct VFSTranslation {
-                int64_t process_fd;
-                int64_t global_fd;
+                int64_t global_fd = 0;
+                int64_t process_fd = 0;
+
+                size_t pos = 0;
+
+                VFSTranslation(int64_t _global_fd, int64_t _process_fd) : global_fd(_global_fd), process_fd(_process_fd) { }
+                VFSTranslation() = default;
             };
 
-            Vector<VFSTranslation>* fd_translation_table = NULL;
+            // The table to convert process VFS to driver VFS
+            Vector<VFSTranslation*>* fd_translation_table = NULL;
             int* fd_translation_table_ref_count = NULL;
             
+            int64_t getLowestVFSInt() {
+                int64_t lowest = 0;
+                restart_loop:
+                for(size_t i = 0; i < fd_translation_table->size(); i++) {
+                    if(fd_translation_table->at(i)->process_fd == lowest) { lowest++; goto restart_loop; }
+                }
+                return lowest;
+            }
+
+            VFSTranslation* getGlobalFd(int64_t local_fd) {
+                for(size_t i = 0; i < fd_translation_table->size(); i++) {
+                    if(fd_translation_table->at(i)->process_fd == local_fd) {
+                        return fd_translation_table->at(i);
+                    }
+                }
+                return NULL;
+            }
+
+            void deleteFd(VFSTranslation* fd) {
+                for(size_t i = 0; i < fd_translation_table->size(); i++) {
+                    if(fd_translation_table->at(i) == fd) {
+                        delete fd;
+                        fd_translation_table->remove(i);
+                        return;
+                    }
+                }
+            }
+
             bool attempt_destroy = false;
         };
     }

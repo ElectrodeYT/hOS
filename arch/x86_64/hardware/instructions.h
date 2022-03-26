@@ -51,4 +51,10 @@ static inline void irqrestore(unsigned long flags)
     asm ("push %0\n\tpopf" : : "rm"(flags) : "memory","cc");
 }
 
+static inline void write_msr(uint64_t msr, uint64_t data) {
+    uint64_t rax = data & 0xFFFFFFFF;
+    uint64_t rdx = data >> 32;
+    asm("wrmsr" :: "a" (rax), "d" (rdx), "c"(msr));
+}
+
 #endif
