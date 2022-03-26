@@ -5,6 +5,7 @@
 #endif
 
 int main(int argc, char** argv) {
-    printf("hello world!");
+    printf("hello world!\n\r");
+    printf("usermode, relocatable ELFs, go brr\n\r");
     for(;;);
 }
