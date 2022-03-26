@@ -135,6 +135,7 @@ bool IDEDevice::Detect(IDEBlockDevice* device) {
 int IDEDevice::read(int id, void* buf, size_t len, size_t offset) {
     if(!devices[id].exists) { return -ENODEV; }
     if(len >= devices[id].len) { return 0; }
+    ASSERT(len, "IDEDevice: read with 0 length");
     // Constrain len
     if((len + offset) >= devices[id].len) {
         len = devices[id].len - offset;
@@ -185,7 +186,7 @@ int IDEDevice::read(int id, void* buf, size_t len, size_t offset) {
     }
     ASSERT(!(ReadStatus() & ATA_SR_DRQ), "IDE: Drive DRQ asserted after read done");
     // Memcopy the data we want
-    memcopy((buffer) + first_sector_offset, buf, len);
+    memcopy(((uint8_t*)(buffer)) + first_sector_offset, buf, len);
     if((sector_count * 512) > 4096) {
         VM::FreePages(buffer, ((sector_count * 512) / 4096) + (((sector_count * 512) & 4095) ? 1 : 0));
     } else {
