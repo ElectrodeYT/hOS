@@ -137,7 +137,7 @@ namespace Kernel {
                     ref_counts[i / 4096]++;
                     uint64_t phys = VM::GetPhysical(base + i);
                     if(phys_addresses) { phys_addresses[i / 4096] = phys; }
-                    VM::MapPage(phys, base + i, 0b101);
+                    // VM::MapPage(phys, base + i, 0b101);
                 }
                 VMObject* new_obj = new VMObject(_allocated, _shared);
                 new_obj->base = base;
