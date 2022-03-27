@@ -39,6 +39,7 @@ public:
     int64_t read(int64_t fd, void* buf, size_t count, Processes::Process* process);
     int64_t write(int64_t fd, void* buf, size_t count, Processes::Process* process);
     int64_t seek(int64_t fd, size_t offset, int whence, Processes::Process* process);
+    bool isatty(int64_t fd, Processes::Process* process);
 
     // These must be called from a interrupt context
     void debugWrite(Interrupts::ISRRegisters* regs, Processes::Process* process);

@@ -32,6 +32,8 @@ public:
     int pread(int64_t file, void* buf, size_t nbyte, size_t offset, int64_t pid);
     int pwrite(int64_t file, void* buf, size_t nbyte, size_t offset, int64_t pid);
     size_t size(int64_t file, int64_t pid);
+    bool isatty(int64_t file, int64_t pid);
+    int64_t copy_descriptor(int64_t file, int64_t new_pid);
 
     struct fs_node {
         char* name;

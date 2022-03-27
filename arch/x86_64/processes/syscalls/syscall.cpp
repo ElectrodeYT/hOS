@@ -66,8 +66,9 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
         }
         // fork
         case 5: {
-            KLog::the().printf("fork syscall: pid %i\r\n", this_proc->pid);
+            KLog::the().printf("fork pid=%i\r\n", this_proc->pid);
             regs->rax = fork(regs);
+            KLog::the().printf("fork new_pid=%i\r\n", regs->rax);
             break;
         }
         // open
@@ -127,6 +128,12 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
         }
         // istty
         case 12: {
+            // KLog::the().printf("istty fd=%i\n\r", regs->rbx);
+            regs->rax = isatty(regs->rbx, this_proc) ? 0 : -ENOTTY;
+            break;
+        }
+        // exec
+        case 13: {
             
             break;
         }
@@ -236,5 +243,10 @@ int64_t SyscallHandler::seek(int64_t fd, size_t offset, int whence, Processes::P
     (void)process;
 }
 
+bool SyscallHandler::isatty(int64_t fd, Processes::Process* process) {
+    Processes::Process::VFSTranslation* vfs_translation = process->getGlobalFd(fd);
+    if(vfs_translation == NULL) { return -EBADF; }
+    return VFS::the().isatty(vfs_translation->global_fd, process->pid);
+}
 
 }

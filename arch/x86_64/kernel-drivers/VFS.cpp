@@ -225,7 +225,7 @@ size_t VFS::size(int64_t file, int64_t pid) {
         if(opened_files.at(i)->id == file) {
             // If we are not the kernel (pid -1) then we also check the pid
             if(pid != -1 && opened_files.at(i)->pid != pid) {
-                return -EBADF;
+                // return -EBADF;
             }
             node = opened_files.at(i)->node;
             break;
@@ -233,6 +233,49 @@ size_t VFS::size(int64_t file, int64_t pid) {
     }
     if(!node) { return -EBADF; }
     return node->size();
+}
+
+bool VFS::isatty(int64_t file, int64_t pid) {
+    // Find the fd
+    fs_node* node = NULL;
+    for(size_t i = 0; i < opened_files.size(); i++) {
+        if(opened_files.at(i)->id == file) {
+            // If we are not the kernel (pid -1) then we also check the pid
+            if(pid != -1 && opened_files.at(i)->pid != pid) {
+                // return -EBADF;
+            }
+            node = opened_files.at(i)->node;
+            break;
+        }
+    }
+    if(!node) { return -EBADF; }
+    return node->flags == FS_NODE_CHARDEVICE;
+}
+
+int64_t VFS::copy_descriptor(int64_t file, int64_t new_pid) {
+    acquire(&mutex);
+    // Find the fd
+    fs_node* node = NULL;
+    for(size_t i = 0; i < opened_files.size(); i++) {
+        if(opened_files.at(i)->id == file) {
+            node = opened_files.at(i)->node;
+            break;
+        }
+    }
+    if(!node) { release(&mutex); return -EBADF; }
+    // Create a new file descriptor for this file
+    int64_t file_desc = 0;
+    for(int64_t i = 0; i < (int64_t)opened_files.size(); i++) {
+        if(opened_files.at(i)->id == file_desc) { file_desc++; i = -1; }
+    }
+    // file_desc is now the lowest unused file descriptor, time to create a new fileDescriptor
+    fileDescriptor* fd = new fileDescriptor;
+    fd->id = file_desc;
+    fd->pid = new_pid;
+    fd->node = node;
+    opened_files.push_back(fd);
+    release(&mutex);
+    return file_desc;
 }
 
 int VFS::fs_node::read(void* buf, size_t size, size_t offset) {
@@ -334,7 +377,7 @@ int EchFSDriver::read(VFS::fs_node* node, void* buf, size_t size, size_t offset)
             file->known_blocks.push_back(main_directory_table[file_dir_entry].starting_block);
         }
         // Traverse the blocks we need to get to the blocks we need
-        for(size_t curr_block = file->known_blocks.size(); curr_block < ((end / block_size) + 1); curr_block++) {
+        for(size_t curr_block = file->known_blocks.size(); curr_block < (((end - 1) / block_size) + 1); curr_block++) {
             // Get the previous block
             uint64_t prev_block_id = file->known_blocks.at(curr_block - 1);
             // Read the next block
@@ -343,7 +386,7 @@ int EchFSDriver::read(VFS::fs_node* node, void* buf, size_t size, size_t offset)
                 KLog::the().printf("EchFSDriver: file seems to have blocks pointing to free area\n\r");
                 return -ENOENT;
             } else if(curr_block_id == 0xFFFFFFFFFFFFFFF0) {
-                KLog::the().printf("EchFSDriver: file seemt to have blocks pointing to reserved area\n\r");
+                KLog::the().printf("EchFSDriver: file seems to have blocks pointing to reserved area\n\r");
                 return -ENOENT;
             } else if(curr_block_id == 0xFFFFFFFFFFFFFFFF) {
                 KLog::the().printf("EchFSDriver: file read points to blocks after the end of the chain\n\r");
