@@ -12,4 +12,5 @@ compiler/binutils-2.37
 compiler/opt
 sysroot/usr
 sysroot/init
+sysroot/hello
 base/prefix-cross.txt
