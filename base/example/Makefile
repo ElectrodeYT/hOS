@@ -8,8 +8,8 @@ LD := $(realpath ../../compiler/opt/bin/$(ARCH)-hos-ld)
 STRIP := $(ARCH)-hos-strip
 CARGS := -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-pic -O2 -Wall -Wextra -g  -I$(SYSROOT)/usr/include
 OBJCPY := $(ARCH)-elf-objcopy
-sources := init.c
-objects := init.elf
+sources := init.c hello.c
+objects := init.elf hello.elf
 objects_sysroot := $(addprefix $(SYSROOT)/, $(basename $(objects)))
 
 %.elf: %.s

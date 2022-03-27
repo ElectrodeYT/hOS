@@ -31,7 +31,9 @@ create-image $(image): $(kernel)
 	@echfs-utils -g -p0 $(image) import $(ld) usr/lib/ld.so
 	@echfs-utils -g -p0 $(image) import $(ld) lib/ld64.so.1
 	@echfs-utils -g -p0 $(image) import ../../sysroot/init init
+	@echfs-utils -g -p0 $(image) import ../../sysroot/hello hello
 	@echfs-utils -g -p0 $(image) import ../../sysroot/hello.txt hello.txt
+	@echfs-utils -g -p0 $(image) import ../../sysroot/read-test.txt read-test.txt
 	@echfs-utils -g -p0 $(image) import ../../sysroot/dev/internal-kernel-mountpoint.txt dev/internal-kernel-mountpoint.txt
 	@limine-install $(image)
 
