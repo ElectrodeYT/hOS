@@ -380,10 +380,15 @@ namespace Kernel {
                 delete physical_addresses;
             }
 
-            // The forked processes share file descriptors, copy the pointers
-            new_proc->fd_translation_table = curr_proc->fd_translation_table;
-            new_proc->fd_translation_table_ref_count = curr_proc->fd_translation_table_ref_count;
-            *(new_proc->fd_translation_table_ref_count) = *(new_proc->fd_translation_table_ref_count) + 1;
+            // Copy the file descriptors
+            new_proc->fd_translation_table = new Vector<Process::VFSTranslation*>;
+            for(size_t i = 0; i < curr_proc->fd_translation_table->size(); i++) {
+                Process::VFSTranslation* translation = new Process::VFSTranslation;
+                translation->process_fd = curr_proc->fd_translation_table->at(i)->process_fd;
+                translation->pos = curr_proc->fd_translation_table->at(i)->pos;
+                translation->global_fd = VFS::the().copy_descriptor(curr_proc->fd_translation_table->at(i)->global_fd, new_proc->pid);
+                new_proc->fd_translation_table->push_back(translation);
+            }
 
             // Create the new thread
             Thread* main_thread = new Thread();
@@ -584,17 +589,14 @@ namespace Kernel {
             // The memory this process used has been freed, delete the process itself
             SwitchPageTables(current_page_table);
             // Check if we can destroy the translation table
-            if(proc->fd_translation_table_ref_count && proc->fd_translation_table) {
-                (*proc->fd_translation_table_ref_count)--;
-                if(!(*proc->fd_translation_table_ref_count)) {
-                    // Noone is using this translation table anymore, we can just yeet it
-                    for(size_t i = 0; i < proc->fd_translation_table->size(); i++) {
-                        VFS::the().close(proc->fd_translation_table->at(i)->global_fd, -1);
-                        delete proc->fd_translation_table->at(i);
-                    }
-                    delete proc->fd_translation_table;
-                    delete proc->fd_translation_table_ref_count;
+            if(proc->fd_translation_table) {
+                // Noone is using this translation table anymore, we can just yeet it
+                for(size_t i = 0; i < proc->fd_translation_table->size(); i++) {
+                    VFS::the().close(proc->fd_translation_table->at(i)->global_fd, -1);
+                    delete proc->fd_translation_table->at(i);
                 }
+                delete proc->fd_translation_table;
+                delete proc->fd_translation_table_ref_count;
             }
             // TODO: destroy page table
             // probably has to be done in scheduler
