@@ -6,7 +6,7 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [],
-            "compilerPath": "${workspaceFolder}/compiler/opt/bin/x86_64-elf-g++",
+            "compilerPath": "${workspaceFolder}/compiler/opt/bin/x86_64-hos-g++",
             "cStandard": "c17",
             "cppStandard": "c++14",
             "intelliSenseMode": "hos-gcc-x64",

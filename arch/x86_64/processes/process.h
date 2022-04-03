@@ -3,6 +3,7 @@
 
 #include <CPP/vector.h>
 #include <mem/VM/virtmem.h>
+#include <mem/PM/physalloc.h>
 #include <hardware/cpu.h>
 
 namespace Kernel {
@@ -17,7 +18,8 @@ namespace Kernel {
                 Running = 0,
                 WaitingOnMessage,
                 WaitingOnIRQ, // A Driver this thread has called into is waiting on a IRQ
-                ShouldDestroy
+                ShouldDestroy,
+                ProcessActionBusy, // A critical action is being taken with the process
             };
             BlockState blocked;
 
@@ -47,6 +49,19 @@ namespace Kernel {
             // Store the base address of all mappings.
             // TODO: find a way to deallocate memory
             Vector<VM::VMObject*> mappings;
+
+            void deleteAllMemory() {
+                for(size_t i = 0; i < mappings.size(); i++) {
+                    VM::VMObject* object = mappings.at(i);
+                    // TODO: CoW support
+                    for(size_t x = 0; x < object->size; x += 4096) {
+                        PM::FreePages(VM::GetPhysical(object->base + x));
+                        VM::MapPage(0, object->base + x, 0);
+                    }
+                    delete object;
+                }
+                mappings.clear_and_free();
+            }
 
             // Buffer for IPC
             // When a readipc_msg or waitipc_msg is done,

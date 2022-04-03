@@ -25,61 +25,43 @@ namespace Kernel {
             if(argc < 0) { return -EINVAL; }
             if(envc < 0) { return -EINVAL; }
 
-            ELF* elf = new ELF(data, length);
-            if(!elf->readHeader()) {
+            ELF* proc_elf = new ELF(data, length);
+            ELF* intr_elf = NULL;
+            if(!proc_elf->readHeader()) {
                 KLog::the().printf("Failed to load ELF file for process %s\r\n", argv[0]);
+                release(&mutex);
                 return -EINVAL;
             }
             // If this is a dynamic executable, we need to load the dynamic relocator
             char* interpreter_name;
             bool is_interpreter = false;
-            if(elf->isDynamic) {
-                KLog::the().printf("Loading ELF interpreter %s\n\r", elf->interpreterPath);
+            if(proc_elf->isDynamic) {
+                KLog::the().printf("Loading ELF interpreter %s\n\r", proc_elf->interpreterPath);
                 // Copy out the name
-                interpreter_name = new char[strlen(elf->interpreterPath)];
-                memcopy(elf->interpreterPath, interpreter_name, strlen(elf->interpreterPath));
+                interpreter_name = new char[strlen(proc_elf->interpreterPath)];
+                memcopy(proc_elf->interpreterPath, interpreter_name, strlen(proc_elf->interpreterPath));
                 // Try to load the ld.so used by this executable
-                int64_t ld_fd = VFS::the().open("/", elf->interpreterPath, -1);
+                int64_t ld_fd = VFS::the().open("/", proc_elf->interpreterPath, -1);
                 if(ld_fd < 0) {
-                    KLog::the().printf("Error executing ELF file %s: interpreter %s doesnt exist\n\r", argv[0], elf->interpreterPath);
-                    delete elf;
+                    KLog::the().printf("Error executing ELF file %s: interpreter %s doesnt exist\n\r", argv[0], proc_elf->interpreterPath);
+                    delete proc_elf;
+                    release(&mutex);
                     return -EINVAL;
                 }
-                delete elf;
                 size_t int_length = VFS::the().size(ld_fd, -1);
                 uint8_t* int_data = new uint8_t[int_length];
                 VFS::the().pread(ld_fd, int_data, int_length, 0, -1);
                 VFS::the().close(ld_fd, -1);
-                elf = new ELF(int_data, int_length);
-                if(!elf->readHeader()) {
+                intr_elf = new ELF(int_data, int_length);
+                if(!intr_elf->readHeader()) {
                     KLog::the().printf("Failed to load ELF header for ld\n\r");
+                    delete proc_elf;
+                    delete intr_elf;
+                    release(&mutex);
+                    return -EINVAL;
                 }
                 is_interpreter = true;
             }
-        
-
-            // Calculate argv size
-            size_t argv_size = 0;
-            for(size_t i = 0; i < (size_t)argc; i++) {
-                argv_size += strlen(argv[i]) + 1;
-                argv_size += 8; // Pointer
-            }
-            if(is_interpreter) {
-                argv_size += strlen(interpreter_name);
-                argv_size += 8; // Pointer
-            }
-            if(argv_size > 0x1000) { return -E2BIG; }
-            // Calculate envp size
-            size_t envp_size = 0;
-            for(size_t i = 0; i < (size_t)envc; i++) {
-                envp_size += strlen(envp[i]) + 1;
-                // Due to envp being hella weird, we actually have to pass a array of pointers
-                // that point to strings, we need to take the pointer size into account
-                envp_size += 8;
-            } 
-            envp_size += 8; // Terminator pointer
-            if(envp_size > 0x1000) { return -E2BIG; }
-
 
             // Create process
             Process* new_proc = new Process;
@@ -111,12 +93,16 @@ namespace Kernel {
             // Switch into new page table
             SwitchPageTables(new_proc->page_table);
 
-            MapELF(elf, new_proc, is_interpreter ? 0x40000000 : 0, is_interpreter);
-
+            // Map the main elf file
+            if(is_interpreter) {
+                MapELF(intr_elf, new_proc, 0x40000000, is_interpreter);
+            }
+            MapELF(proc_elf, new_proc, proc_elf->file_base ? 0 : 0x4000000, is_interpreter);
+            
             // If we loaded the interpreter, we can now perform relocations on the ELF binary
             if(is_interpreter) {
                 KLog::the().printf("Relocating interpreter\n\r");
-                elf->relocate((void*)0x40000000);
+                intr_elf->relocate((void*)0x40000000);
             }
 
             // Create main stack
@@ -129,16 +115,10 @@ namespace Kernel {
             uint64_t aux_phnum = 0;
             uint64_t aux_entry = 0;
             if(is_interpreter) {
-                ELF* real_elf = new ELF(data, length); // original elf file
-                real_elf->readHeader();
-                
-                // Map the original ELF to memory
-                MapELF(real_elf, new_proc, real_elf->file_base ? 0 : 0x4000000, false);
-                
-                aux_entry = real_elf->file_entry;
-                aux_phdr = real_elf->file_base + real_elf->file_program_header_offset;
-                aux_phent = real_elf->file_program_header_entry_size;
-                aux_phnum = real_elf->file_program_header_count;
+                aux_entry = proc_elf->file_entry;
+                aux_phdr = proc_elf->file_base + proc_elf->file_program_header_offset;
+                aux_phent = proc_elf->file_program_header_entry_size;
+                aux_phnum = proc_elf->file_program_header_count;
             }
 
             // Setup stack
@@ -153,9 +133,10 @@ namespace Kernel {
             // Initialize main thread
             Thread* main_thread = new Thread;
             main_thread->tid = 0;
-            main_thread->regs.rip = elf->file_entry;
             if(is_interpreter) {
-                main_thread->regs.rip += 0x40000000;
+                main_thread->regs.rip = intr_elf->file_entry + 0x40000000;
+            } else {
+                main_thread->regs.rip = proc_elf->file_entry + (proc_elf->file_base ? 0 : 0x4000000);
             }
             main_thread->regs.rflags = 0x202;
             main_thread->regs.cs = 0x18 | 0b11;
@@ -270,7 +251,7 @@ namespace Kernel {
 
                     if(mapping->base == 0) { continue; }
 
-                    KLog::the().printf("Mapping for ELF segment %i: base %x, size %x\r\n", i, mapping->base, mapping->size);
+                    // KLog::the().printf("Mapping for ELF segment %i: base %x, size %x\r\n", i, mapping->base, mapping->size);
 
                     // Allocate it
                     size_t page_count = 0;
@@ -365,19 +346,20 @@ namespace Kernel {
             // Copy the memory mappings over
             new_proc->page_table = VM::CreateNewPageTable();
             uint64_t current_table = VM::CurrentPageTable();
+            
+            // TODO: CoW
             for(size_t i = 0; i < curr_proc->mappings.size(); i++) {
-                uint64_t* physical_addresses = new uint64_t[curr_proc->mappings.at(i)->size / 4096];
-                VM::VMObject* new_cow = curr_proc->mappings.at(i)->copyAsCopyOnWrite(physical_addresses);
-                // Now we need to switch to the new page table
-                SwitchPageTables(new_proc->page_table);
-                // Now we need to map all the pages as read only
-                for(size_t x = 0; x < new_cow->size; x += 4096) {
-                    VM::MapPage(physical_addresses[x / 4096], new_cow->base + x, 0b101);
+                VM::VMObject* new_obj = curr_proc->mappings.at(i)->copy();
+                // Allocate pages for this
+                for(size_t x = 0; x < new_obj->size; x += 4096) {
+                    uint64_t current_phys = VM::GetPhysical(new_obj->base + x);
+                    // Copy them from the virtual offset
+                    SwitchPageTables(new_proc->page_table);
+                    VM::MapPage(PM::AllocatePages(1), new_obj->base + x, 0b111);
+                    memcopy((void*)(current_phys + VM::GetVirtualOffset()), (void*)(new_obj->base + x), 4096);
+                    SwitchPageTables(current_table);
                 }
-                new_proc->mappings.push_back(new_cow);
-                // Switch back
-                SwitchPageTables(current_table);
-                delete physical_addresses;
+                new_proc->mappings.push_back(new_obj);
             }
 
             // Copy the file descriptors
@@ -426,6 +408,117 @@ namespace Kernel {
             processes.push_back(new_proc);
             release(&mutex);
             return new_proc->pid;
+        }
+
+        int Scheduler::Exec(uint8_t* data, size_t length, char** argv, int argc, char** envp, int envc, Interrupts::ISRRegisters* regs) {
+            // We forbid all threads other than thread 0 to perform an exec
+            if(curr_thread != 0) { return -EFAULT; }
+            acquire(&mutex);
+            // Try to load the elf file from data
+            ELF* proc_elf = new ELF(data, length);
+            ELF* intr_elf = NULL;
+            if(!proc_elf->readHeader()) {
+                KLog::the().printf("Failed to load ELF file for process %s\r\n", argv[0]);
+                release(&mutex);
+                return -EINVAL;
+            }
+            // If this is a dynamic executable, we need to load the dynamic relocator
+            char* interpreter_name;
+            bool is_interpreter = false;
+            if(proc_elf->isDynamic) {
+                KLog::the().printf("Loading ELF interpreter %s\n\r", proc_elf->interpreterPath);
+                // Copy out the name
+                interpreter_name = new char[strlen(proc_elf->interpreterPath)];
+                memcopy(proc_elf->interpreterPath, interpreter_name, strlen(proc_elf->interpreterPath));
+                // Try to load the ld.so used by this executable
+                int64_t ld_fd = VFS::the().open("/", proc_elf->interpreterPath, -1);
+                if(ld_fd < 0) {
+                    KLog::the().printf("Error executing ELF file %s: interpreter %s doesnt exist\n\r", argv[0], proc_elf->interpreterPath);
+                    delete proc_elf;
+                    release(&mutex);
+                    return -EINVAL;
+                }
+                size_t int_length = VFS::the().size(ld_fd, -1);
+                uint8_t* int_data = new uint8_t[int_length];
+                VFS::the().pread(ld_fd, int_data, int_length, 0, -1);
+                VFS::the().close(ld_fd, -1);
+                intr_elf = new ELF(int_data, int_length);
+                if(!intr_elf->readHeader()) {
+                    KLog::the().printf("Failed to load ELF header for ld\n\r");
+                    delete proc_elf;
+                    delete intr_elf;
+                    release(&mutex);
+                    return -EINVAL;
+                }
+                is_interpreter = true;
+            }
+
+            Process* current_proc = CurrentProcess();
+            // Kill all threads other than thread zero
+            for(size_t i = 1; i < current_proc->threads.size(); i++) {
+                current_proc->threads.at(i)->blocked = Thread::BlockState::ProcessActionBusy;
+            }
+            
+            // Yeet out all the memory this process is currently using
+            current_proc->deleteAllMemory();
+            // Delete all threads other than thread zero
+            while(current_proc->threads.size() > 1) {
+                Thread* thread_to_destroy = current_proc->threads.at(1);
+                VM::FreePages((void*)thread_to_destroy->syscall_stack_map->base, thread_to_destroy->syscall_stack_map->size / 4096);
+                delete thread_to_destroy;
+                current_proc->threads.remove(1);
+            }
+
+            // Map the main elf file
+            if(is_interpreter) {
+                MapELF(intr_elf, current_proc, 0x40000000, is_interpreter);
+            }
+            MapELF(proc_elf, current_proc, proc_elf->file_base ? 0 : 0x4000000, is_interpreter);
+            
+            // If we loaded the interpreter, we can now perform relocations on the ELF binary
+            if(is_interpreter) {
+                KLog::the().printf("Relocating interpreter\n\r");
+                intr_elf->relocate((void*)0x40000000);
+            }
+
+            // Create main stack
+            const uint64_t stack_size = 16 * 4096;
+            uint64_t stack_base = SyscallHandler::the().mmap(current_proc, stack_size, NULL);
+
+            // If we have a dynamic link, we need to copy the elf file of the original executable into memory
+            uint64_t aux_phdr = 0;
+            uint64_t aux_phent = 0;
+            uint64_t aux_phnum = 0;
+            uint64_t aux_entry = 0;
+            if(is_interpreter) {
+                aux_entry = proc_elf->file_entry;
+                aux_phdr = proc_elf->file_base + proc_elf->file_program_header_offset;
+                aux_phent = proc_elf->file_program_header_entry_size;
+                aux_phnum = proc_elf->file_program_header_count;
+            }
+
+            // Setup stack
+            uint64_t proc_rsp;
+            ProcessSetupStack(argv, argc, envp, envc, (void*)(stack_base + stack_size - 8), aux_entry, aux_phdr, aux_phent, aux_phnum, &proc_rsp);
+
+            SyscallHandler::the().mmap(current_proc, 10, NULL);
+
+            if(is_interpreter) {
+                regs->rip = intr_elf->file_entry + 0x40000000;
+            } else {
+                regs->rip = proc_elf->file_entry + (proc_elf->file_base ? 0 : 0x4000000);
+            }
+            regs->rflags = 0x202;
+            regs->cs = 0x18 | 0b11;
+            regs->ss = 0x20 | 0b11;
+            regs->rsp = proc_rsp; // -16 for the two pointers on the stack
+            regs->rdi = argc;
+            regs->rsi = 0;
+            regs->rdx = 0;
+            regs->rcx = envc;
+
+            release(&mutex);
+            return 0;
         }
 
         void Scheduler::SaveContext(Interrupts::ISRRegisters* regs) {
@@ -572,22 +665,8 @@ namespace Kernel {
             ASSERT(proc->pid, "Attempted to kill init!");
             // KLog::the().printf("Killing %s\r\n", proc->name);
             uint64_t state = save_irqdisable();
-            
-            // Free the physical pages and unmap the process
-            // Switch to its page table
-            uint64_t current_page_table = VM::CurrentPageTable();
-            SwitchPageTables(proc->page_table);
-            for(size_t i = 0; i < proc->mappings.size(); i++) {
-                VM::VMObject* obj = proc->mappings.at(i);
-                if(obj->isShared()) { continue; }
-                for(uint64_t curr = obj->base; curr < obj->size; curr += 4096) {
-                    uint64_t physical = VM::GetPhysical(curr);
-                    PM::FreePages(physical);
-                }
-                delete obj;
-            }
-            // The memory this process used has been freed, delete the process itself
-            SwitchPageTables(current_page_table);
+            // Delete all current memory
+            FreeCurrentProcMem();
             // Check if we can destroy the translation table
             if(proc->fd_translation_table) {
                 // Noone is using this translation table anymore, we can just yeet it
@@ -605,6 +684,31 @@ namespace Kernel {
             running_proc_killed = true;
             // Restart interrupts
             irqrestore(state);
+        }
+
+        void Scheduler::FreeCurrentProcMem() {
+            ASSERT(processes.size() > curr_proc, "KillCurrentProcess() called while curr_proc is out of range!");
+            Process* proc = processes.at(curr_proc);
+            // Free the physical pages and unmap the process
+            // Switch to its page table
+            uint64_t current_page_table = VM::CurrentPageTable();
+            SwitchPageTables(proc->page_table);
+            for(size_t i = 0; i < proc->mappings.size(); i++) {
+                VM::VMObject* obj = proc->mappings.at(i);
+                for(uint64_t curr = obj->base; curr < obj->size; curr += 4096) {
+                    obj->decrementCopyOnWrite(curr / 4096);
+                    if(obj->checkLocalCopyOnWrite(curr / 4096)) {
+                        // If this has no other copies in use, then we can just delete it
+                        // otherwise we cant delete this page
+                        if(obj->checkCopyOnWrite(curr / 4096)) { continue; }
+                    }
+                    uint64_t physical = VM::GetPhysical(curr);
+                    PM::FreePages(physical);
+                }
+                delete obj;
+            }
+            // The memory this process used has been freed, delete the process itself
+            SwitchPageTables(current_page_table);
         }
 
         void Scheduler::WaitOnIRQ(int irq) {

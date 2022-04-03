@@ -73,6 +73,7 @@ public:
     // Clear the vector, free the allocations and set capacity to 0
     void clear_and_free() {
         _capacity = 0;
+        _size = 0;
         free(array);
         array = NULL;
     }

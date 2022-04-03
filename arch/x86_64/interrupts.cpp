@@ -100,6 +100,7 @@ namespace Kernel {
                     if(found && found->write) {
                         // Debug::SerialPrintf("Performing copy on write for page %x\r\n", (faulting & ~(0xFFF)));
                         found->decrementCopyOnWrite(vm_object_page);
+                        found->unmarkLocalCopyOnWrite(vm_object_page);
                         // If this is the last CoW, we just remap it as write
                         if(found->checkCopyOnWrite(vm_object_page) == 0) {
                             // Debug::SerialPrintf("This was the last reference to page %x, simply remapping as write\r\n", (faulting & ~(0xFFF)));

@@ -162,7 +162,6 @@ namespace PM {
     }
 
     void FreePages(uint64_t object, int count) {
-        acquire(&mutex);
         descriptors* curr = pages;
         while(curr) {
             uint64_t* bitmap = (uint64_t*)(curr + 1);
@@ -180,7 +179,6 @@ namespace PM {
             }
             curr = curr->next;
         }
-        release(&mutex);
         KLog::the().printf("PM: couldnt deallocate page %x, count %i, ignoring\n\r", object, count);
     }
 

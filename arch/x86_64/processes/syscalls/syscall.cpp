@@ -134,7 +134,49 @@ void SyscallHandler::HandleSyscall(Interrupts::ISRRegisters* regs) {
         }
         // exec
         case 13: {
+            // Copy out the name
+            char* file = new char[regs->rcx + 1];
+            // TODO: make this not exploit hell
+            if(!this_proc->attemptCopyFromUser(regs->rbx, regs->rcx, file)) { regs->rax = -EFAULT; break; }
+            file[regs->rcx] = '\0';
+            KLog::the().printf("exec file=%s argv=%x envp=%x\n\r", file, regs->rdx, regs->rdi);
+            // Try to load the file
+            int64_t elf_fd = VFS::the().open(this_proc->working_dir, file, this_proc->pid);
+            if(elf_fd < 0) { regs->rax = elf_fd; break; }
+            size_t elf_size = VFS::the().size(elf_fd, this_proc->pid);
+            uint8_t* elf_data = new uint8_t[elf_size];
+            int64_t elf_read_ret = VFS::the().pread(elf_fd, elf_data, elf_size, 0, this_proc->pid);
+            if(elf_read_ret < 0) { regs->rax = elf_read_ret; break; } 
+            VFS::the().close(elf_fd, this_proc->pid);
+            // Calculate argc, envc
+            size_t argc = 0;
+            size_t envc = 0;
+            for(char** argv = (char**)(regs->rdx); *argv && (uint64_t)(*argv) > 4096; argv++) { argc++; }
+            for(char** envp = (char**)(regs->rdi); *envp; envp++) { envc++; }
+
+            // We copy this out now
+            char** argv = new char*[argc + 1];
+            char** proc_argv = (char**)(regs->rdx);
+            char** envp = new char*[envc + 1];
+            char** proc_envp = (char**)(regs->rdi);
             
+            for(size_t i = 0; i < argc; i++) {
+                argv[i] = new char[strlen(proc_argv[i]) + 1];
+                if(!this_proc->attemptCopyFromUser((uint64_t)(proc_argv[i]), strlen(proc_argv[i]), argv[i])) { regs->rax = -EFAULT; break; }
+                argv[i][strlen(proc_argv[i])] = '\0';
+            }
+            argv[argc] = NULL;
+
+            for(size_t i = 0; i < envc; i++) {
+                envp[i] = new char[strlen(proc_envp[i]) + 1];
+                if(!this_proc->attemptCopyFromUser((uint64_t)(proc_envp[i]), strlen(proc_envp[i]), envp[i])) { regs->rax = -EFAULT; break; }
+                envp[i][strlen(proc_envp[i])] = '\0';
+            }
+            proc_envp[envc] = NULL;
+            
+
+            uint64_t ret = Processes::Scheduler::the().Exec(elf_data, elf_size, argv, argc, envp, envc, regs);
+            if(ret != 0) { regs->rax = ret; }
             break;
         }
         default: KLog::the().printf("Got invalid syscall: %x\r\n", (uint64_t)regs->rax); regs->rax = -ENOSYS; break;

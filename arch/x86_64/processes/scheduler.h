@@ -56,7 +56,7 @@ namespace Kernel {
             // This creates a new process in place of the current process. It will decrease the refcount of all its VMObjects,
             // and deallocate them if neccesary.
             // The enviroment is taken from the execing process.
-            int Exec(uint8_t* data, size_t length, char** argv, int arc);
+            int Exec(uint8_t* data, size_t length, char** argv, int argc, char** envp, int envc, Interrupts::ISRRegisters* regs);
 
             // Create a task running in kernel space.
             int CreateKernelTask(void (*start)(void*), void* arg, uint64_t stack_size);
@@ -101,6 +101,9 @@ namespace Kernel {
             bool ProcessSetupStack(char** argv, int argc, char** envp, int envc, void* stack_base, uint64_t entry, uint64_t phdr, uint64_t phent, uint64_t phnum, uint64_t* rsp);
             // Map a ELF file into the process space, with optional offset
             void MapELF(ELF* elf, Process* new_proc, uint64_t offset, bool is_interpreter);
+
+            // Free all memory in use by current process
+            void FreeCurrentProcMem();
 
             // Get the next available PID
             int64_t GetNextPid() {

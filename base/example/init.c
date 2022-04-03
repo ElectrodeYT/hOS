@@ -27,7 +27,8 @@ int main(int argc, char** argv) {
         int read_size = read(test_fd, buffer, 100);
         buffer[read_size] = '\0';
         printf("fork read test: %s\n\r", buffer);
-        printf("exiting forked\n\r");
+        printf("execing hello\n\r");
+        execl("/hello", "/hello");
         exit(0);
     }
     // We waste a shit ton of time here

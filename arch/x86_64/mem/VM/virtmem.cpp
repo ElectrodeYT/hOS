@@ -235,7 +235,6 @@ namespace VM {
         #if defined(VM_LOG_FREE) && VM_LOG_FREE
         Kernel::Debug::SerialPrintf("[VM]: deallocating %i pages at %x\n\r", pages, (uint64_t)adr);
         #endif
-        acquire(&mutex);
         // Loop through each page and see if we can find this addr
         for(uint64_t curr = (uint64_t)adr; curr < ((uint64_t)adr + (pages * 4096)); curr += 4096) {
             uint64_t phys = GetPhysical(curr);
@@ -246,7 +245,6 @@ namespace VM {
             }
             MapPage(0xDEADA550000, curr, 0);
         }
-        release(&mutex); 
     }
     #else
     void FreePages(void*adr) {

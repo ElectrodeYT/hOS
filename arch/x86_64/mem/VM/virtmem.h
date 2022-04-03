@@ -85,37 +85,50 @@ namespace Kernel {
             uint64_t base;
             uint64_t size;
 
-            uint8_t checkCopyOnWrite(uint64_t page) {
+            inline uint8_t checkCopyOnWrite(uint64_t page) {
                 if(!ref_counts) { return 0; }
                 return ref_counts[page];
             }
 
-            void decrementCopyOnWrite(uint64_t page) {
+            inline bool checkLocalCopyOnWrite(uint64_t page) {
+                if(!map_ref_counts) { return false; }
+                return map_ref_counts[page];
+            }
+
+            inline void decrementCopyOnWrite(uint64_t page) {
                 if(ref_counts) {
                     if(ref_counts[page] > 0) { ref_counts[page]--; }
                 }
             }
 
+            inline void unmarkLocalCopyOnWrite(uint64_t page) {
+                if(map_ref_counts) {
+                    map_ref_counts[page] = false;
+                }
+            }
+
             ~VMObject() {
                 // Decrement all CoW
-                if(ref_counts) {
-                    bool all_are_zero = true;
-                    for(size_t i = 0; i < size; i += 4096) {
-                        if(ref_counts[i / 4096] > 0) { ref_counts[i / 4096]--; }
-                        if(ref_counts[i / 4096] != 0 ) { all_are_zero = false; }
-                    }
-                    if(all_are_zero) {
-                        // Check if all the refcounts are gone
-                        all_are_zero = true;
-                        for(size_t i = 0; i < ref_count_org_base_len; i++) {
-                            if(ref_count_org_base[i] != 0) { all_are_zero = false; break; }
-                        }
-                        if(all_are_zero) {
-                            // Debug::SerialPrintf("ref_count_org_base for mapping at %x has depleted, deleteing ref_counts_org_base\r\n", base);
-                            delete ref_count_org_base;
-                        }
-                    }
-                }
+                // if(ref_counts) {
+                //     bool all_are_zero = true;
+                //     for(size_t i = 0; i < size; i += 4096) {
+                //         if(ref_counts[i / 4096] > 0) { ref_counts[i / 4096]--; }
+                //         if(ref_counts[i / 4096] != 0 ) { all_are_zero = false; }
+                //     }
+                //     if(all_are_zero) {
+                //         // Check if all the refcounts are gone
+                //         all_are_zero = true;
+                //         for(size_t i = 0; i < ref_count_org_base_len; i++) {
+                //             if(ref_count_org_base[i] != 0) { all_are_zero = false; break; }
+                //         }
+                //         if(all_are_zero) {
+                //             // Debug::SerialPrintf("ref_count_org_base for mapping at %x has depleted, deleteing ref_counts_org_base\r\n", base);
+                //             delete ref_count_org_base;
+                //         }
+                //     }
+                // }
+                // Delete local CoW
+                if(map_ref_counts) { delete map_ref_counts; }
             }
 
             // This creates a copy of this mapping as a CoW
@@ -127,6 +140,7 @@ namespace Kernel {
             // as read-only.
             // This can only be used on user VMObjects.
             VMObject* copyAsCopyOnWrite(uint64_t* phys_addresses) {
+                Debug::Panic("CoW gated");
                 if(!ref_counts) {
                     ref_counts = new uint8_t[round_to_page_up(size) / 4096];
                     memset(ref_counts, 1, round_to_page_up(size) / 4096);
@@ -137,9 +151,18 @@ namespace Kernel {
                     ref_counts[i / 4096]++;
                     uint64_t phys = VM::GetPhysical(base + i);
                     if(phys_addresses) { phys_addresses[i / 4096] = phys; }
-                    // VM::MapPage(phys, base + i, 0b101);
+                    VM::MapPage(phys, base + i, 0b101);
                 }
                 VMObject* new_obj = new VMObject(_allocated, _shared);
+                
+                // Create the page specific CoW's
+                if(map_ref_counts) {
+                    map_ref_counts = new bool[round_to_page_up(size) / 4096];
+                    for(size_t i = 0; i < round_to_page_up(size) / 4096; i++) { map_ref_counts[i] = true; }
+                }
+                new_obj->map_ref_counts = new bool[round_to_page_up(size) / 4096];
+                for(size_t i = 0; i < round_to_page_up(size) / 4096; i++) { new_obj->map_ref_counts[i] = true; }
+                
                 new_obj->base = base;
                 new_obj->size = size;
                 new_obj->ref_counts = ref_counts;
@@ -147,6 +170,14 @@ namespace Kernel {
                 new_obj->write = write;
                 new_obj->execute = execute;
                 return new_obj;
+            }
+
+            // Creates a copy from this VMObject.
+            VMObject* copy() {
+                VMObject* ret = new VMObject(_allocated, _shared);
+                ret->base = base;
+                ret->size = size;
+                return ret;
             }
 
             // Refcount for this region.
@@ -158,6 +189,12 @@ namespace Kernel {
 
             // CoW ref counters
             uint8_t* ref_counts = NULL;
+
+            // VMObject specific CoW
+            // This says if a specific page is still CoW
+            // If it is, we can not deallocate it without its ref count being zero
+            bool* map_ref_counts = NULL;
+
             // Original base of the allocated ref counts
             // This is needed for munmap, as it might split
             // a ref counted vmobject and it might be able to

@@ -9,26 +9,24 @@ STRIP := $(ARCH)-hos-strip
 CARGS := -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -fno-pic -O2 -Wall -Wextra -g  -I$(SYSROOT)/usr/include
 OBJCPY := $(ARCH)-elf-objcopy
 sources := init.c hello.c
-objects := init.elf hello.elf
+objects := init hello
 objects_sysroot := $(addprefix $(SYSROOT)/, $(basename $(objects)))
 
-%.elf: %.s
+%: %.s
 	@echo "[BASE-ASM]		" $< $@
 	@$(AS) $< -o $@.o
 	@$(LD) $@.o -o $@
 
-%.elf: %.c
+%: %.c
 	@echo "[BASE-C]		" $< $@
 	@$(C) -c $< -o $@.o $(CARGS)
 	@$(C) -O2 $@.o -o $@ -g
 	@
 	@#$(STRIP) $@
 
-$(objects_sysroot): ${objects}
-	@echo "[CP]			"$< $@
-	@cp $< $@
-
-all: $(objects) $(objects_sysroot)
+all: $(objects)
+	@echo "[CP]			" $(objects) $(SYSROOT)
+	@cp $(objects) $(SYSROOT)
 
 clean:
 	@rm $(shell find . -name "*.elf*") $(objects_sysroot) 2> /dev/null; true
